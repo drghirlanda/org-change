@@ -5,9 +5,9 @@
 
 * Introduction
 
-org-change (ab)uses the org-mode link syntax for a simple "track
-changes" feature. It defines a ~change~ link type to mark additions,
-deletions, and replacements. For example:
+org-change is a minor mode that (ab)uses the org-mode link syntax for
+a simple "track changes" feature. It defines a ~change~ link type to
+mark additions, deletions, and replacements. For example:
 #+begin_src org
   [[change:old text][new text]]
 #+end_src
@@ -26,7 +26,9 @@ Two features provided by org-change make this syntax useful:
 2. Export filters to render ~change~ links appropriately.
 Right now, only exporting to Latex is supported.
 
-* TODO Installation
+* Installation
+
+Manually from here for now, from MELPA later. 
 
 * Key bindings
 
@@ -41,7 +43,6 @@ marking a region. In this case, you will prompted for the new text.
 [fn:key] The quote in =C-`= is a left-quote character. It is not
 pretty, but practically every other ctrl prefix that does not also
 need shift is taken. It's the curse of keymensionality.
-
 
 * LaTeX export
 
@@ -81,20 +82,23 @@ changed through the customize interface:
   M-x customize-group RET org-change
 #+end_src
 
-
 * Bugs and limitations
 
+- Whatever is inside a ~change~ link is exported as-is. For example,
+  org-ref links are not interpreted.
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets, especially with link that span multiple lines. Often ~M-q~
   takes care of this.
-- Whatever is inside a ~change~ link is exported as-is. For example,
-  org-ref links are not interpreted.
 
 * Planned features
 
 - More export filters
 - Enable users to add export filters   
 - A convenient way to see the hidden part of a link 
+- Functions ~org-change-accept~ and ~org-change-reject~ to remove
+  change links and replace them with appropriate text
+- Function ~org-change-accept-all~ to process all change links in the
+  buffer
 
 * Notes
 
