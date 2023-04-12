@@ -1,8 +1,9 @@
 #+title: org-change: Track changes in org-mode
 #+author: Stefano Ghirlanda
 #+options: toc:nil ':t
+#+latex_header: \hypersetup{hidelinks}
 
-* Introdution
+* Introduction
 
 org-change (ab)uses the org-mode link syntax for a simple "track
 changes" feature. It defines a ~change~ link type to mark additions,
@@ -20,22 +21,22 @@ To indicate a deletion, use ~**DELETED**~ as ~new text~:
 #+begin_src org
   [[change:old text][**DELETED**]]
 #+end_src
-Two features make org-change useful:
-1. Key bindings to automate inserting change links.
+Two features provided by org-change make this syntax useful:
+1. Key bindings to insert ~change~ links.
 2. Export filters to render ~change~ links appropriately.
+Right now, only exporting to Latex is supported.
+
+* TODO Installation
 
 * Key bindings
 
-- ~C-` a~ :: is for additions.[fn:key]
-- ~C-` d~ :: is for deletions.
-- ~C-` r~ :: is for replacements.
-
-You can mark a region and then use one of these keys to mark it as an
-addition, deletion, or replacement. In the case of
-replacement, you will be prompted for the new text.
-
-You can use ~C-` a~ without marking a region. In this case, you will
-prompted for the new text.
+- ~C-` a~ :: for additions.[fn:key]
+- ~C-` d~ :: for deletions.
+- ~C-` r~ :: for replacements.
+You can mark a region and then use these keys to mark it as an
+addition, deletion, or replacement. In the case of replacement, you
+will be prompted for the new text. You can also use ~C-` a~ without
+marking a region. In this case, you will prompted for the new text.
 
 [fn:key] The quote in =C-`= is a left-quote character. It is not
 pretty, but practically every other ctrl prefix that does not also
@@ -52,29 +53,34 @@ must be included:
 org-change will then use the commands ~\added~, ~\deleted~, and
 ~\replaced~ provided by this package.
 
-** Comments
-
-With the ~changes~ package, you can attach comments to changes. In
-~org-change~, text within double asterisks at the end of the ~new
-text~ portion of a change link will be exported as a comment. For
-example this:
+org-change supports some additional features of the ~changes~
+package. You can add a comment to any edit like this:
 #+begin_src org
-  [[change:old text][new text**I disagree**]]
+  [[change:old text][new text**A comment**]]
 #+end_src
-Is exported to this:
+which is exported to
 #+begin_src org
-  \replaced[comment=I disagree]{new text}{old text}
+  \replaced[comment=A comment]{new text}{old text}
 #+end_src
-You can add any option supported by changes by tagging it to the end
-of the comment. For example, you can indicate the author of the
-comment:
+The comment must be at the end of ~new text~. You can add other fields
+supported by ~changes~ by tagging them to the end of the comment. For
+example, you can indicate the author of the comment:
 #+begin_src org
-  [[change:old text][new text**I disagree,author=SG**]]
+  [[change:old text][new text**My comment,author=SG**]]
 #+end_src
 which is exported to:
 #+begin_src org
-  \replaced[comment=I disagree,author=SG]{new text}{old text}
+  \replaced[comment=My comment,author=SG]{new text}{old text}
 #+end_src
+
+* Customization
+
+The key bindings and the face used to display change links can be
+changed through the customize interface:
+#+begin_src org
+  M-x customize-group RET org-change
+#+end_src
+
 
 * Bugs and limitations
 
@@ -88,3 +94,9 @@ which is exported to:
 
 - More export filters
 - Enable users to add export filters   
+- A convenient way to see the hidden part of a link 
+
+* Notes
+
+I described the features of org-change to ChatGPT and asked to get the
+corresponding code. It was mostly wrong, but a good starting point.
