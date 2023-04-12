@@ -1,0 +1,90 @@
+#+title: org-change: Track changes in org-mode
+#+author: Stefano Ghirlanda
+#+options: toc:nil ':t
+
+* Introdution
+
+org-change (ab)uses the org-mode link syntax for a simple "track
+changes" feature. It defines a ~change~ link type to mark additions,
+deletions, and replacements. For example:
+#+begin_src org
+  [[change:old text][new text]]
+#+end_src
+Because org-mode (typically) hides the part of the link within the
+first pair of brackets, you only see ~new text~. To indicate an
+addition, just omit ~old text~:
+#+begin_src org
+  [[change:][new text]]
+#+end_src
+To indicate a deletion, use ~**DELETED**~ as ~new text~:
+#+begin_src org
+  [[change:old text][**DELETED**]]
+#+end_src
+Two features make org-change useful:
+1. Key bindings to automate inserting change links.
+2. Export filters to render ~change~ links appropriately.
+
+* Key bindings
+
+- ~C-` a~ :: is for additions.[fn:key]
+- ~C-` d~ :: is for deletions.
+- ~C-` r~ :: is for replacements.
+
+You can mark a region and then use one of these keys to mark it as an
+addition, deletion, or replacement. In the case of
+replacement, you will be prompted for the new text.
+
+You can use ~C-` a~ without marking a region. In this case, you will
+prompted for the new text.
+
+[fn:key] The quote in =C-`= is a left-quote character. It is not
+pretty, but practically every other ctrl prefix that does not also
+need shift is taken. It's the curse of keymensionality.
+
+
+* LaTeX export
+
+When exporting to LaTeX, org-change uses the ~changes~ package, which
+must be included:
+#+begin_src org
+  #+latex_header: \usepackage{changes}
+#+end_src
+org-change will then use the commands ~\added~, ~\deleted~, and
+~\replaced~ provided by this package.
+
+** Comments
+
+With the ~changes~ package, you can attach comments to changes. In
+~org-change~, text within double asterisks at the end of the ~new
+text~ portion of a change link will be exported as a comment. For
+example this:
+#+begin_src org
+  [[change:old text][new text**I disagree**]]
+#+end_src
+Is exported to this:
+#+begin_src org
+  \replaced[comment=I disagree]{new text}{old text}
+#+end_src
+You can add any option supported by changes by tagging it to the end
+of the comment. For example, you can indicate the author of the
+comment:
+#+begin_src org
+  [[change:old text][new text**I disagree,author=SG**]]
+#+end_src
+which is exported to:
+#+begin_src org
+  \replaced[comment=I disagree,author=SG]{new text}{old text}
+#+end_src
+
+* Bugs and limitations
+
+- Link hiding is sometimes inaccurate in org-mode. You may see stray
+  brackets, especially with link that span multiple lines. Often ~M-q~
+  takes care of this.
+- Whatever is inside a ~change~ link is exported as-is. For example,
+  org-ref links are not interpreted.
+
+* Planned features
+
+- More export filters
+- Enable users to add export filters   
