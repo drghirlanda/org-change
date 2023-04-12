@@ -22,9 +22,11 @@ To indicate a deletion, use ~**DELETED**~ as ~new text~:
   [[change:old text][**DELETED**]]
 #+end_src
 Two features provided by org-change make this syntax useful:
-1. Key bindings to insert ~change~ links.
+1. Key bindings to manipulate ~change~ links.
 2. Export filters to render ~change~ links appropriately.
 Right now, only exporting to Latex is supported.
+
+
 
 * Installation
 
@@ -43,6 +45,16 @@ marking a region. In this case, you will prompted for the new text.
 [fn:key] The quote in =C-`= is a left-quote character. It is not
 pretty, but practically every other ctrl prefix that does not also
 need shift is taken. It's the curse of keymensionality.
+
+
+Key bindings are also provided to accept and reject changes:
+- ~C-` k~ :: to accept the change at point.  
+- ~C-` x~ :: to reject the change at point.  
+To accept means to delete the change link (including any comments) and
+insert the new text (nothing if the change is a deletion). To reject
+means to delete the change link and insert the old text (nothing if
+the change is an addition).
+
 
 * LaTeX export
 
@@ -84,7 +96,7 @@ changed through the customize interface:
 
 * Bugs and limitations
 
-- Whatever is inside a ~change~ link is exported as-is. For example,
+- Text inside a ~change~ link is exported as-is. For example,
   org-ref links are not interpreted.
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets, especially with link that span multiple lines. Often ~M-q~
@@ -95,8 +107,6 @@ changed through the customize interface:
 - More export filters
 - Enable users to add export filters   
 - A convenient way to see the hidden part of a link 
-- Functions ~org-change-accept~ and ~org-change-reject~ to remove
-  change links and replace them with appropriate text
 - Function ~org-change-accept-all~ to process all change links in the
   buffer
 
