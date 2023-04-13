@@ -122,10 +122,10 @@ changed through the customize interface:
 
 * Planned features
 
-- More export filters
-- An interface for users to add export filters   
-- Function ~org-change-accept-all~ to process all change links in the
-  buffer
+- More export filters? 
+- An interface for users to add export filters?
+- A function ~org-change-accept-all~ to process all change links in the
+  buffer?
 
 * Notes
 
