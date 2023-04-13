@@ -37,14 +37,14 @@ org-change key bindings start with ~C-`~ (control + left quote). Not
 the prettiest, but few control prefixes are free. It's the curse of
 keymensionality. It can be [[Customization][customized]].
 
-Adding, deleting and replacing text uses these key bindings:
-- ~C-` a~ :: for additions (~org-change-add~).
+You can Add, delete, and replace text like this:
+- ~C-` a~ :: for additions (invokes ~org-change-add~).
 - ~C-` d~ :: for deletions (~org-change-delete~).
 - ~C-` r~ :: for replacements (~org-change-replace~).
-You can mark a region and then use these keys to mark it as an
-addition, deletion, or replacement. In the case of replacement, you
-will be prompted for the new text. You can also use ~C-` a~ without
-marking a region. In this case, you will prompted for the new text.
+These actions operate on the active region, marking it as an addition,
+deletion, or replacement. In the case of replacement, you will be
+prompted for the new text. You can also use ~C-` a~ without marking a
+region. In this case, you will prompted for the new text.
 
 Key bindings are also provided to accept and reject changes:
 - ~C-` k~ :: to accept the change at point (~org-change-accept~).
