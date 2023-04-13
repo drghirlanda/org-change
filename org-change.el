@@ -115,7 +115,7 @@ old text and erasing the new text or **DELETE** marker."
 ;; Tell org-mode about change: links 
 
 (defface org-change-link-face
-  '((t (:foreground "orange" :underline nil)))
+  '((t (:foreground "blue violet" :underline nil)))
   "Face for org-change links.")
 
 (org-link-set-parameters "change"
