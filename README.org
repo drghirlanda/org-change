@@ -75,7 +75,7 @@ org-change will then use the commands ~\added~, ~\deleted~, and
 
 The content of the change link can contain org-mode notation like
 *bold* and /emphasis/, as well as Latex commands. However, some other
-features do not currently work. Notably org-ref links, must be
+features do not currently work. Notably org-ref links must be
 translated manually to Latex. So this will *not* work:
 #+begin_src org
   [[change:][Let's cite something cite:something]]
