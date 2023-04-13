@@ -78,18 +78,26 @@ added text is shown in a change: link."
   (if (use-region-p)
       (let ((beg (region-beginning))
 	    (end (region-end) (point)))
-	(insert (format "[[change:][%s]]" (buffer-substring-no-properties beg end)))
+	(insert (format
+		 "[[change:][%s]]"
+		 (buffer-substring-no-properties beg end)))
 	(delete-region beg end))
-    (insert (format "[[change:][%s]]" (read-string "New text: ")))))
+    (insert (format
+	     "[[change:][%s]]"
+	     (read-string "New text: ")))))
 
 (defun org-change--accept-or-reject (accept)
   "Internal function to accept (t argument) or reject (nil
 argument)."
-  (setq link-position (org-in-regexp "\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]" 10))
+  (setq link-position (org-in-regexp
+		       "\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]"
+		       10))
   (if link-position
       (let ((old-text (match-string-no-properties 1))
 	    ;; to get new-text we also discard comments, if present: 
-	    (new-text (replace-regexp-in-string "\\*\\*.+\\*\\*$" "" (match-string-no-properties 2)))
+	    (new-text (replace-regexp-in-string
+		       "\\*\\*.+\\*\\*$" ""
+		       (match-string-no-properties 2)))
 	    (beg (car link-position))
 	    (end (cdr link-position)))
 	(delete-region beg end)
@@ -134,7 +142,9 @@ old text and erasing the new text or DELETE marker."
 (defun org-change-export-link (old-text new-text-raw backend _)
   "Export a change link to a backend. This function operates within
 the standard org-mode link export."
-  (if (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new-text-raw)
+  (if (string-match
+       "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$"
+       new-text-raw)
       (progn
 	(setq new-text (match-string 1 new-text-raw))
 	(setq comment  (match-string 2 new-text-raw)))
