@@ -17,9 +17,9 @@ addition, just omit ~old text~:
 #+begin_src org
   [[change:][new text]]
 #+end_src
-To indicate a deletion, use ~**DELETED**~ as ~new text~:
+To indicate a deletion, use ~((DELETED))~ as ~new text~:
 #+begin_src org
-  [[change:old text][**DELETED**]]
+  [[change:old text][((DELETED))]]
 #+end_src
 Two features provided by org-change make this syntax useful:
 1. Key bindings to manipulate ~change~ links.
