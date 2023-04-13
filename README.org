@@ -26,40 +26,46 @@ Two features provided by org-change make this syntax useful:
 2. Export filters to render ~change~ links appropriately.
 Right now, only exporting to Latex is supported.
 
-
-
 * Installation
 
 Manually from here for now, from MELPA later. 
 
 * Key bindings
 
-- ~C-` a~ :: for additions.[fn:key]
-- ~C-` d~ :: for deletions.
-- ~C-` r~ :: for replacements.
+org-change key bindings start with ~C-`~ (control + left quote). (Not
+the prettiest prefix, but practically every other control prefix is
+taken. It's the curse of keymensionality. See [[Customization]] to change
+it.) Adding, deleting and replacing text uses these key bindings:
+- ~C-` a~ :: for additions (~org-change-add~).
+- ~C-` d~ :: for deletions (~org-change-delete~).
+- ~C-` r~ :: for replacements (~org-change-replace~).
 You can mark a region and then use these keys to mark it as an
 addition, deletion, or replacement. In the case of replacement, you
 will be prompted for the new text. You can also use ~C-` a~ without
 marking a region. In this case, you will prompted for the new text.
 
-[fn:key] The quote in =C-`= is a left-quote character. It is not
-pretty, but practically every other ctrl prefix that does not also
-need shift is taken. It's the curse of keymensionality.
-
-
 Key bindings are also provided to accept and reject changes:
-- ~C-` k~ :: to accept the change at point.  
-- ~C-` x~ :: to reject the change at point.  
+- ~C-` k~ :: to accept the change at point (~org-change-accept~).
+- ~C-` x~ :: to reject the change at point (~org-change-reject~).  
 To accept means to delete the change link (including any comments) and
-insert the new text (nothing if the change is a deletion). To reject
-means to delete the change link and insert the old text (nothing if
-the change is an addition).
+insert the new text (or nothing, if the change is a deletion). To
+reject means to delete the change link and insert the old text (or
+nothing, if the change is an addition).
 
+The following key bindings are provided by org-mode, and are
+particularly useful for ~change:~ links:
+- ~C-c C-l~ :: lets you edit the link in the minibuffer. Because this
+  is an org-mode function for all links, it will display the "old
+  text" as "Link: change:old text" and the "new text" as "Description:
+  new text."
+- ~M-x org-toggle-link-display~ :: toggles between showing and hiding
+  the hidden part of every link in the buffer. This can be useful to
+  work on longer edits.
 
 * LaTeX export
 
 When exporting to LaTeX, org-change uses the ~changes~ package, which
-must be included:
+must be included with a ~#+latex_header~ line:
 #+begin_src org
   #+latex_header: \usepackage{changes}
 #+end_src
@@ -67,7 +73,7 @@ org-change will then use the commands ~\added~, ~\deleted~, and
 ~\replaced~ provided by this package.
 
 org-change supports some additional features of the ~changes~
-package. You can add a comment to any edit like this:
+package. You can add a comment to any change like this:
 #+begin_src org
   [[change:old text][new text**A comment**]]
 #+end_src
@@ -76,7 +82,7 @@ which is exported to
   \replaced[comment=A comment]{new text}{old text}
 #+end_src
 The comment must be at the end of ~new text~. You can add other fields
-supported by ~changes~ by tagging them to the end of the comment. For
+supported by ~changes~ by adding them at the end of the comment. For
 example, you can indicate the author of the comment:
 #+begin_src org
   [[change:old text][new text**My comment,author=SG**]]
@@ -99,18 +105,21 @@ changed through the customize interface:
 - Text inside a ~change~ link is exported as-is. For example,
   org-ref links are not interpreted.
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
-  brackets, especially with link that span multiple lines. Often ~M-q~
+  brackets especially with link that span multiple lines. Often ~M-q~
   takes care of this.
 
 * Planned features
 
 - More export filters
-- Enable users to add export filters   
-- A convenient way to see the hidden part of a link 
+- An interface for users to add export filters   
+- A more convenient way to see the hidden part of a link, especially
+  to work on longer edits. Maybe a temporary buffer like the one
+  offered for source blocks.
 - Function ~org-change-accept-all~ to process all change links in the
   buffer
 
 * Notes
 
-I described the features of org-change to ChatGPT and asked to get the
-corresponding code. It was mostly wrong, but a good starting point.
+I described some features of org-change to ChatGPT and asked for the
+corresponding code. It was wrong in many ways, but figuring out why
+was useful.
