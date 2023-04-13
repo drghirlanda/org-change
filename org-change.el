@@ -54,7 +54,7 @@ will be hidden in a change: link."
 			(buffer-substring-no-properties beg end)
 			(read-string "New text: ")))
 	(delete-region beg end))
-    (message "Select text to be replaced")))
+    (user-error "Select text to be replaced")))
 
 (defun org-change-delete ()
   "Mark the active region as text that is being deleted. The text
@@ -68,7 +68,7 @@ shown in its place."
 			(buffer-substring-no-properties beg end)
 			org-change--deleted-marker))
 	(delete-region beg end))
-    (message "Select text to be deleted")))
+    (user-error "Select text to be deleted")))
 
 (defun org-change-add ()
   "Mark the active region as text that is being added. If the
@@ -97,7 +97,7 @@ argument)."
 	    (unless (equal new-text org-change--deleted-marker)
 	      (insert new-text))
 	  (insert old-text)))
-    (message "There is no change: link here")))
+    (user-error "There is no change: link here")))
 
 (defun org-change-accept ()
   "Accept the change at point, replacing the change: link with the
