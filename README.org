@@ -1,5 +1,6 @@
 #+title: org-change: Track changes in org-mode
 #+author: Stefano Ghirlanda
+#+email: drghirlanda@gmail.com
 #+options: toc:nil ':t
 #+latex_header: \hypersetup{hidelinks}
 
@@ -32,10 +33,11 @@ Manually from here for now, from MELPA later.
 
 * Key bindings
 
-org-change key bindings start with ~C-`~ (control + left quote). (Not
-the prettiest prefix, but practically every other control prefix is
-taken. It's the curse of keymensionality. See [[Customization]] to change
-it.) Adding, deleting and replacing text uses these key bindings:
+org-change key bindings start with ~C-`~ (control + left quote). Not
+the prettiest, but few control prefixes are free. It's the curse of
+keymensionality. See [[Customization]] to change it.
+
+Adding, deleting and replacing text uses these key bindings:
 - ~C-` a~ :: for additions (~org-change-add~).
 - ~C-` d~ :: for deletions (~org-change-delete~).
 - ~C-` r~ :: for replacements (~org-change-replace~).
@@ -52,12 +54,12 @@ insert the new text (or nothing, if the change is a deletion). To
 reject means to delete the change link and insert the old text (or
 nothing, if the change is an addition).
 
-The following key bindings are provided by org-mode, and are
-particularly useful for ~change:~ links:
+The following functionality is provided by org-mode, and is useful for
+~change~ links:
 - ~C-c C-l~ :: lets you edit the link in the minibuffer. Because this
   is an org-mode function for all links, it will display the "old
-  text" as "Link: change:old text" and the "new text" as "Description:
-  new text."
+  text" as =Link: change:old text= and the "new text" as =Description:
+  new text=.
 - ~M-x org-toggle-link-display~ :: toggles between showing and hiding
   the hidden part of every link in the buffer. This can be useful to
   work on longer edits.
@@ -71,6 +73,18 @@ must be included with a ~#+latex_header~ line:
 #+end_src
 org-change will then use the commands ~\added~, ~\deleted~, and
 ~\replaced~ provided by this package.
+
+The content of the change link can contain org-mode notation like
+*bold* and /emphasis/, as well as Latex commands. However, some other
+features do not currently work. Notably org-ref links, must be
+translated manually to Latex. So this will *not* work:
+#+begin_src org
+  [[change:][Let's cite something cite:something]]
+#+end_src
+But this will:
+#+begin_src org
+  [[change:][Let's cite something \cite{something}]]
+#+end_src
 
 org-change supports some additional features of the ~changes~
 package. You can add a comment to any change like this:
@@ -102,8 +116,7 @@ changed through the customize interface:
 
 * Bugs and limitations
 
-- Text inside a ~change~ link is exported as-is. For example,
-  org-ref links are not interpreted.
+- org-ref links inside ~change~ links are not interpreted.
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets especially with link that span multiple lines. Often ~M-q~
   takes care of this.
@@ -112,14 +125,17 @@ changed through the customize interface:
 
 - More export filters
 - An interface for users to add export filters   
-- A more convenient way to see the hidden part of a link, especially
-  to work on longer edits. Maybe a temporary buffer like the one
-  offered for source blocks.
 - Function ~org-change-accept-all~ to process all change links in the
   buffer
 
 * Notes
 
-I described some features of org-change to ChatGPT and asked for the
-corresponding code. It was wrong in many ways, but figuring out why
-was useful.
+To get started on org-change, I described some features to ChatGPT
+(April 2023 version) and asked for the corresponding code. It was
+wrong in many ways, like using non-existing functions with plausible
+names like ~org-escape-latex~, oscillating between a single- and a
+multi-file package, and just not doing what it was supposed to do. It
+would also insist that some things would work even when told that they
+did not. It did have a good general grasp of many things, like
+defining a minor mode and customize variables, and it was always
+syntactically correct.
