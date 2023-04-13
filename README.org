@@ -35,7 +35,7 @@ Manually from here for now, from MELPA later.
 
 org-change key bindings start with ~C-`~ (control + left quote). Not
 the prettiest, but few control prefixes are free. It's the curse of
-keymensionality. See [[Customization]] to change it.
+keymensionality. It can be [[Customization][customized]].
 
 Adding, deleting and replacing text uses these key bindings:
 - ~C-` a~ :: for additions (~org-change-add~).
