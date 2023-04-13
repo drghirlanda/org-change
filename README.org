@@ -58,8 +58,7 @@ The following functionality is provided by org-mode, and is useful for
 ~change~ links:
 - ~C-c C-l~ :: lets you edit the link in the minibuffer. Because this
   is an org-mode function for all links, it will display the "old
-  text" as =Link: change:old text= and the "new text" as =Description:
-  new text=.
+  text" as =Link: change:old text= and the "new text" as =Description: new text=.
 - ~M-x org-toggle-link-display~ :: toggles between showing and hiding
   the hidden part of every link in the buffer. This can be useful to
   work on longer edits.
