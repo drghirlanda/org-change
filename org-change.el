@@ -39,53 +39,52 @@
 
 ;; Code 
 
-(setq org-change--deleted-marker "((DELETED))")
+(defvar org-change--deleted-marker "((DELETED))"
+  "Placeholder for deleted text.")
 
 (defun org-change-replace ()
   "Mark the active region as old text that is being replaced by new
 text. You will be prompted for the new text, and the old text
 will be hidden in a change: link."
   (interactive "")
-  (if (not (use-region-p))
-      (message "Select text to be replaced")
-    (let ((beg (region-beginning))
-	  (end (region-end)))
-      (insert (format "[[change:%s][%s]]" 
-		      (buffer-substring-no-properties beg end)
-		      (read-string "New text: ")))
-      (delete-region beg end))))
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+	    (end (region-end)))
+	(insert (format "[[change:%s][%s]]" 
+			(buffer-substring-no-properties beg end)
+			(read-string "New text: ")))
+	(delete-region beg end))
+    (message "Select text to be replaced")))
 
 (defun org-change-delete ()
   "Mark the active region as text that is being deleted. The text
 will be hidden in a change: link and a DELETED marker will be
 shown in its place."
   (interactive "")
-  (if (not (use-region-p))
-      (message "Select text to be deleted")
-    (let ((beg (region-beginning))
-	  (end (region-end)))
-      (insert (format "[[change:%s][%s]]" 
-		      (buffer-substring-no-properties beg end)
-		      org-change--deleted-marker))
-      (delete-region beg end))))
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+	    (end (region-end)))
+	(insert (format "[[change:%s][%s]]" 
+			(buffer-substring-no-properties beg end)
+			org-change--deleted-marker))
+	(delete-region beg end))
+    (message "Select text to be deleted")))
 
-;;
 (defun org-change-add ()
   "Mark the active region as text that is being added. If the
 region is not active, you will be prompted for text to add. The
 added text is shown in a change: link."
   (interactive "")
-  (let	((beg (if (use-region-p) (region-beginning) (point)))
-	 (end (if (use-region-p) (region-end) (point))))
-    (insert (format "[[change:][%s]]" 
-		    (if (use-region-p)
-			(buffer-substring-no-properties beg end)
-		      (read-string "New text: "))))
-    (delete-region beg end)))
-
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+	    (end (region-end) (point)))
+	(insert (format "[[change:][%s]]" (buffer-substring-no-properties beg end)))
+	(delete-region beg end))
+    (insert (format "[[change:][%s]]" (read-string "New text: ")))))
 
 (defun org-change--accept-or-reject (accept)
-  ""
+  "Internal function to accept (t argument) or reject (nil
+argument)."
   (setq link-position (org-in-regexp "\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]" 10))
   (if link-position
       (let ((old-text (match-string-no-properties 1))
@@ -95,20 +94,20 @@ added text is shown in a change: link."
 	    (end (cdr link-position)))
 	(delete-region beg end)
 	(if accept
-	    (if (not (equal new-text org-change--deleted-marker))
-		(insert new-text))
+	    (unless (equal new-text org-change--deleted-marker)
+	      (insert new-text))
 	  (insert old-text)))
     (message "There is no change: link here")))
 
 (defun org-change-accept ()
   "Accept the change at point, replacing the change: link with the
-new text and erasing the old text or **DELETE** marker."
+new text and erasing the old text or DELETE marker."
   (interactive "")
   (org-change--accept-or-reject t))
 
 (defun org-change-reject ()
   "Reject the change at point, replacing the change: link with the
-old text and erasing the new text or **DELETE** marker."
+old text and erasing the new text or DELETE marker."
   (interactive "")
   (org-change--accept-or-reject nil))
 
@@ -133,14 +132,14 @@ old text and erasing the new text or **DELETE** marker."
     nil)
 
 (defun org-change-export-link (old-text new-text-raw backend _)
-  ""
+  "Export a change link to a backend. This function operates within
+the standard org-mode link export."
   (if (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new-text-raw)
       (progn
 	(setq new-text (match-string 1 new-text-raw))
 	(setq comment  (match-string 2 new-text-raw)))
-    (progn
-      (setq new-text new-text-raw)
-      (setq comment "")))
+    (setq new-text new-text-raw)
+    (setq comment ""))
   (cond ((org-export-derived-backend-p backend 'latex)
 	 (progn
 	   (if (not (equal comment ""))
@@ -160,6 +159,11 @@ old text and erasing the new text or **DELETE** marker."
   "Customization options for org-change."
   :group 'org)
 
+(defcustom org-change-add-key (kbd "C-` a")
+  "Keybinding for org-change-add."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-delete-key (kbd "C-` d")
   "Keybinding for org-change-delete."
   :type 'key-sequence
@@ -167,11 +171,6 @@ old text and erasing the new text or **DELETE** marker."
 
 (defcustom org-change-replace-key (kbd "C-` r")
   "Keybinding for org-change-replace."
-  :type 'key-sequence
-  :group 'org-change)
-
-(defcustom org-change-add-key (kbd "C-` a")
-  "Keybinding for org-change-add."
   :type 'key-sequence
   :group 'org-change)
 
@@ -204,4 +203,3 @@ old text and erasing the new text or **DELETE** marker."
 (provide 'org-change)
 
 ;;; org-change.el ends here
-
