@@ -37,54 +37,53 @@
 
 ;;; Code:
 
-;; Code 
-
 (defvar org-change--deleted-marker "((DELETED))"
   "Placeholder for deleted text.")
+
+(defun org-change--get-region ()
+  "Helper function. Returns content of active region or nil. "
+  (when (use-region-p)
+    (buffer-substring-no-properties
+     (region-beginning)
+     (region-end))))
+
+(defun org-change--mark-change (old-text new-text)
+  "Helper function. Deletes region and inserts change link."
+  (when (use-region-p)
+    (delete-region (region-beginning) (region-end)))
+  (insert (format "[[change:%s][%s]]" old-text new-text)))
 
 (defun org-change-replace ()
   "Mark the active region as old text that is being replaced by new
 text. You will be prompted for the new text, and the old text
 will be hidden in a change: link."
   (interactive "")
-  (if (use-region-p)
-      (let ((beg (region-beginning))
-	    (end (region-end)))
-	(insert (format "[[change:%s][%s]]" 
-			(buffer-substring-no-properties beg end)
-			(read-string "New text: ")))
-	(delete-region beg end))
-    (user-error "Select text to be replaced")))
+  (let ((old-text (org-change--get-region)))
+    (if (equal old-text nil)
+	(user-error "Select text to be replaced")
+      (org-change--mark-change
+       old-text
+       (read-string "New text: ")))))
 
 (defun org-change-delete ()
   "Mark the active region as text that is being deleted. The text
 will be hidden in a change: link and a DELETED marker will be
 shown in its place."
   (interactive "")
-  (if (use-region-p)
-      (let ((beg (region-beginning))
-	    (end (region-end)))
-	(insert (format "[[change:%s][%s]]" 
-			(buffer-substring-no-properties beg end)
-			org-change--deleted-marker))
-	(delete-region beg end))
-    (user-error "Select text to be deleted")))
+  (let ((old-text (org-change--get-region)))
+    (if (equal old-text nil)
+	(user-error "Select text to be deleted")
+      (org-change--mark-change old-text org-change--deleted-marker))))
 
 (defun org-change-add ()
   "Mark the active region as text that is being added. If the
 region is not active, you will be prompted for text to add. The
 added text is shown in a change: link."
   (interactive "")
-  (if (use-region-p)
-      (let ((beg (region-beginning))
-	    (end (region-end) (point)))
-	(insert (format
-		 "[[change:][%s]]"
-		 (buffer-substring-no-properties beg end)))
-	(delete-region beg end))
-    (insert (format
-	     "[[change:][%s]]"
-	     (read-string "New text: ")))))
+  (org-change--mark-change
+   ""
+   (or (org-change--get-region)
+       (read-string "New text: "))))
 
 (defun org-change--accept-or-reject (accept)
   "Internal function to accept (t argument) or reject (nil

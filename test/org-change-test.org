@@ -15,3 +15,17 @@ recognized: \(a=1\).]]
 [[change:Replace this][Replacement]]
 
 [[change:Delete this][((DELETED))]]
+
+[[change:][pippo]]
+
+[[change:old][pippo]]
+
+[[change:pippo][((DELETED))]]
+
+
+
+
+
+
+
+
