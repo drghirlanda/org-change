@@ -1,8 +1,0 @@
-#+title: Tests for org-change
-#+author: Stefano Ghirlanda
-
-* Replaced text in [[change:the text][a header]]
-
-Replaced text in [[change:a header][the text]].
-
-
