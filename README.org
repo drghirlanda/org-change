@@ -25,7 +25,7 @@ To indicate a deletion, use ~((DELETED))~ as ~new text~:
 Two features provided by org-change make this syntax useful:
 1. Key bindings to manipulate ~change~ links.
 2. Export filters to render ~change~ links appropriately.
-Right now, only exporting to Latex is supported.
+Right now, org-change supports exporting to Latex and HTML.
 
 * Installation
 
