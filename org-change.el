@@ -41,14 +41,14 @@
   "Placeholder for deleted text.")
 
 (defun org-change--get-region ()
-  "Helper function. Returns content of active region or nil. "
+  "Return content of active region or nil."
   (when (use-region-p)
     (buffer-substring-no-properties
      (region-beginning)
      (region-end))))
 
 (defun org-change--mark-change (old-text new-text)
-  "Helper function. Deletes region and inserts change link."
+  "Deletes region and inserts change link."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
   (insert (format "[[change:%s][%s]]" old-text new-text)))
@@ -86,8 +86,7 @@ added text is shown in a change: link."
        (read-string "New text: "))))
 
 (defun org-change--accept-or-reject (accept)
-  "Internal function to accept (t argument) or reject (nil
-argument)."
+  "Accept (t argument) or reject (nil argument) change at point."
   (setq link-position (org-in-regexp
 		       "\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]"
 		       10))
@@ -138,6 +137,28 @@ old text and erasing the new text or DELETE marker."
     ""
     nil)
 
+;;; Export mechanism
+
+(defun org-change--export-latex (old-text new-text comment)
+  "Export a change link to Latex. "
+  (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
+    (cond ((equal old-text "")
+	   (format "\\added%s{%s}" comment new-text))
+	  ((equal new-text org-change--deleted-marker)
+	   (format "\\deleted%s{%s}" comment old-text))
+	  (t
+	   (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
+
+(defvar org-change--exporters
+  '((latex . org-change--export-latex))
+  "List of exporters known to org-change.")
+
+(defun org-change-add-export-backend (backend function)
+  "Add an export backend to org-change. The function take arguments
+old-text, new-text, and comment, and return a string appropriate
+to the backend."
+  (add-to-list org-change--exporters (backend . function)))
+
 (defun org-change-export-link (old-text new-text-raw backend _)
   "Export a change link to a backend. This function operates within
 the standard org-mode link export."
@@ -149,18 +170,14 @@ the standard org-mode link export."
 	(setq comment  (match-string 2 new-text-raw)))
     (setq new-text new-text-raw)
     (setq comment ""))
-  (cond ((org-export-derived-backend-p backend 'latex)
-	 (progn
-	   (if (not (equal comment ""))
-	       (setq comment (format "[comment=%s]" comment)))
-	   (cond ((equal old-text "")
-		  (format "\\added%s{%s}" comment new-text))
-		 ((equal new-text org-change--deleted-marker)
-		  (format "\\deleted%s{%s}" comment old-text))
-		 (t
-		  (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
-	(t
-	 (error (format "Change links not supported in %s export" backend)))))
+  (let ((exporter (alist-get
+		   backend
+		   org-change--exporters
+		   nil
+		   nil 'org-export-derived-backend-p)))
+    (if exporter
+	(funcall exporter old-text new-text comment)
+      (error (format "Change links not supported in %s export" backend)))))
 
 ;; Customizations and minor mode definitions
 
