@@ -117,8 +117,9 @@ span:
 #+begin_src org
   [[change:old text][new-text**comment**]]
 #+end_src
-#+results: html-example
-: <span class="org-change-added">new text<span class="org-change-comment">comment</span></span><span class="org-change-deleted">old text</span>
+#+begin_example
+<span class="org-change-added">new text<span class="org-change-comment">comment</span></span><span class="org-change-deleted">old text</span>
+#+end_example
 You can then use CSS to display these classes as desired.
 
 The example above is generated with:
