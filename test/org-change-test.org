@@ -5,6 +5,8 @@
 
 Replaced text in [[change:a header][the text]].
 
+[[change:][An addition with a comment**This is a comment**
+]]
 [[change:Deleted text][((DELETED))]]
 
 [[change:][Let's see if *org mode commands* and \LaTeX commands keep being

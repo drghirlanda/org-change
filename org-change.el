@@ -149,8 +149,24 @@ old text and erasing the new text or DELETE marker."
 	  (t
 	   (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
 
+(defun org-change--export-html (old-text new-text comment)
+  "Export a change link to HTML. "
+  (defun make-span (class text)
+    (if (equal text "")
+	""
+      (format "<span class=\"%s\">%s</span>" class text)))
+  (cond ((equal old-text "")
+	 (make-span "org-change-added" (concat new-text (make-span "org-change-comment" comment))))
+	((equal new-text org-change--deleted-marker)
+	  (make-span "org-change-deleted" (concat old-text (make-span "org-change-comment" comment))))
+	(t
+	 (concat
+	  (make-span "org-change-added" (concat new-text (make-span "org-change-comment" comment)))
+	  (make-span "org-change-deleted" old-text)))))
+
 (defvar org-change--exporters
-  '((latex . org-change--export-latex))
+  '((latex . org-change--export-latex)
+    (html . org-change--export-html))
   "List of exporters known to org-change.")
 
 (defun org-change-add-export-backend (backend function)

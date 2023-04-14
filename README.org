@@ -63,7 +63,8 @@ The following functionality is provided by org-mode, and is useful for
   the hidden part of every link in the buffer. This can be useful to
   work on longer edits.
 
-* LaTeX export
+* Exporting
+** LaTeX export
 
 When exporting to LaTeX, org-change uses the ~changes~ package, which
 must be included with a ~#+latex_header~ line:
@@ -105,13 +106,48 @@ which is exported to:
   \replaced[comment=My comment,author=SG]{new text}{old text}
 #+end_src
 
-* Customization
+** HTML export
+
+When exporting to HTML, org-change produces ~<span>~ elements with
+classes ~org-change-added~, ~org-change-deleted~, and
+~org-change-comment~. A replace link has both an added and a deleted
+span, while add and delete links only have one span. The comment span
+is embedded in the add span when present, otherwise in the delete
+span:
+#+begin_src org
+  [[change:old text][new-text**comment**]]
+#+end_src
+#+results: html-example
+: <span class="org-change-added">new text<span class="org-change-comment">comment</span></span><span class="org-change-deleted">old text</span>
+You can then use CSS to display these classes as desired.
+
+The example above is generated with:
+#+name: html-example
+#+begin_src elisp
+  (org-change--export-html "old text" "new text" "comment")
+#+end_src
+which happens automatically when exporting.
+
+* Customizing and extending
+** Customization
 
 The key bindings and the face used to display change links can be
 changed through the customize interface:
 #+begin_src org
   M-x customize-group RET org-change
 #+end_src
+
+** Adding exporters
+
+To add an export format, add something like this to your org file:
+#+begin_src org
+  ,#+begin_src elisp
+    (org-change-add-export-backend 'backend 'backend-function)
+  ,#+end_src
+#+end_src
+where ~backend~ is a backend known to org-mode and ~backend-function~
+is a function that produces the desired string from three string
+arguments: ~old-text~, ~new-text~, and ~comment~.
 
 * Bugs and limitations
 
@@ -123,7 +159,6 @@ changed through the customize interface:
 * Planned features
 
 - More export filters?
-- An interface for users to add export filters?
 - A function ~org-change-accept-all~ to process all change links in the
   buffer?
 - Make it possible to select final or draft in Latex export?
