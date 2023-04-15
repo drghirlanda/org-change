@@ -183,9 +183,7 @@ arguments: ~old-text~, ~new-text~, and ~comment~.
 To get started on org-change, I described some features to ChatGPT
 (April 2023 version) and asked for the corresponding code. It was
 wrong in many ways, like using non-existing functions with plausible
-names (~org-escape-latex~), oscillating between a single- and a
-multi-file package, and just not doing what it was supposed to do. It
-would also insist that some things would work even when told that they
-did not. It did have a good general grasp of many things, like
-defining a minor mode and customize variables, and it was always
-syntactically correct.
+names (~org-escape-latex~) and other non-existing features. It also
+insisted that some things would work even when told that they did
+not. It did have a good grasp of many things, like defining a minor
+mode and customize variables, and it was always syntactically correct.
