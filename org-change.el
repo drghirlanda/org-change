@@ -1,4 +1,4 @@
-;;; org-change.el --- Track changes in org-mode files -*- lexical-binding: t;
+;;; org-change.el --- Track changes in org-mode files -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
