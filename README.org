@@ -7,14 +7,27 @@
 * Introduction
 
 org-change is a minor mode that (ab)uses the org-mode link syntax for
-a simple "track changes" feature. It defines a ~change~ link type to
-mark additions, deletions, and replacements. For example:
+a simple "track changes" feature similar to some word processors.
+
+org-change provides:
+- A ~change~ link type to mark additions, deletions, and replacements.
+- Functions and key bindings to manipulate ~change~ links.
+- Export filters to render ~change~ links (currently Latex and HTML).
+
+* Installation
+
+Install manually from here for now, hopefully from MELPA soon.
+
+* ~change~ link syntax
+
+To indicate that "old text" is being replaced by "new text," the
+~change~ link syntax is:
 #+begin_src org
   [[change:old text][new text]]
 #+end_src
-Because org-mode (typically) hides the part of the link within the
-first pair of brackets, you only see ~new text~. To indicate an
-addition, just omit ~old text~:
+The idea is that you end up seeing only "new text," because org-mode
+(typically) hides the part of the link within the first pair of
+brackets. To indicate an addition, just omit ~old text~:
 #+begin_src org
   [[change:][new text]]
 #+end_src
@@ -22,37 +35,37 @@ To indicate a deletion, use ~((DELETED))~ as ~new text~:
 #+begin_src org
   [[change:old text][((DELETED))]]
 #+end_src
-Two features provided by org-change make this syntax useful:
-1. Key bindings to manipulate ~change~ links.
-2. Export filters to render ~change~ links appropriately.
-Right now, org-change supports exporting to Latex and HTML.
+You can also embed comments in change links by surrounding them with
+double stars at the end of ~new text~:
+#+begin_src org
+  [[change:old text][new text**A comment**]]
+#+end_src
+All this by itself is not very useful, but read on.
 
-* Installation
+* ~change~ link manipulation
 
-Manually from here for now, from MELPA later. 
+org-change provides key sequences to easily insert and manipulate
+change links. All key sequences start with ~C-`~ (control + left
+quote). Not the prettiest, but, Emacs having been around for a while,
+few control prefixes are free. It's the curse of keymensionality. It
+can be [[Customization][customized]].
 
-* Key bindings
+You can mark additions, deletions, and replacements like this:
+- ~C-` a~ :: for additions.
+- ~C-` d~ :: for deletions.
+- ~C-` r~ :: for replacements.
+These actions operate on the active region. For example, in the case
+of replacement, the selected text is marked for deletion, and you are
+prompted for new text. You can also use ~C-` a~ without marking a
+region, in which case you are prompted for new text.
 
-org-change key bindings start with ~C-`~ (control + left quote). Not
-the prettiest, but few control prefixes are free. It's the curse of
-keymensionality. It can be [[Customization][customized]].
-
-You can Add, delete, and replace text like this:
-- ~C-` a~ :: for additions (invokes ~org-change-add~).
-- ~C-` d~ :: for deletions (~org-change-delete~).
-- ~C-` r~ :: for replacements (~org-change-replace~).
-These actions operate on the active region, marking it as an addition,
-deletion, or replacement. In the case of replacement, you will be
-prompted for the new text. You can also use ~C-` a~ without marking a
-region. In this case, you will prompted for the new text.
-
-Key bindings are also provided to accept and reject changes:
-- ~C-` k~ :: to accept the change at point (~org-change-accept~).
-- ~C-` x~ :: to reject the change at point (~org-change-reject~).  
-To accept means to delete the change link (including any comments) and
-insert the new text (or nothing, if the change is a deletion). To
-reject means to delete the change link and insert the old text (or
-nothing, if the change is an addition).
+Key sequences are also provided to accept and reject the change under the cursor:
+- ~C-` k~ :: to accept.
+- ~C-` x~ :: to reject.
+"Accept" means to delete the change link (including any comments) and
+insert the new text (or nothing, if the change is a
+deletion). "Reject" means to delete the change link and insert the old
+text (or nothing, if the change is an addition).
 
 The following functionality is provided by org-mode, and is useful for
 ~change~ links:
@@ -87,17 +100,17 @@ But this will:
 #+end_src
 
 org-change supports some additional features of the ~changes~
-package. You can add a comment to any change like this:
+package. First, it supports comments, so that
 #+begin_src org
   [[change:old text][new text**A comment**]]
 #+end_src
-which is exported to
+is exported to
 #+begin_src org
   \replaced[comment=A comment]{new text}{old text}
 #+end_src
-The comment must be at the end of ~new text~. You can add other fields
-supported by ~changes~ by adding them at the end of the comment. For
-example, you can indicate the author of the comment:
+You can also sneak in other fields supported by ~changes~ at the end
+of the comment. For example, you can indicate the author of the
+comment:
 #+begin_src org
   [[change:old text][new text**My comment,author=SG**]]
 #+end_src
@@ -132,7 +145,7 @@ which happens automatically when exporting.
 * Customizing and extending
 ** Customization
 
-The key bindings and the face used to display change links can be
+The key sequences and the face used to display change links can be
 changed through the customize interface:
 #+begin_src org
   M-x customize-group RET org-change
@@ -159,10 +172,12 @@ arguments: ~old-text~, ~new-text~, and ~comment~.
 
 * Planned features
 
-- More export filters?
+- More export filters
 - A function ~org-change-accept-all~ to process all change links in the
-  buffer?
-- Make it possible to select final or draft in Latex export?
+  buffer
+- Make it possible to select final or draft when exporting. Final just
+  uses new text.
+- A function to manipulate comment.
   
 * Notes
 
