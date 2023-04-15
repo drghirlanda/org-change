@@ -126,10 +126,11 @@ classes ~org-change-added~, ~org-change-deleted~, and
 ~org-change-comment~. A replace link has both an added and a deleted
 span, while add and delete links only have one span. The comment span
 is embedded in the add span when present, otherwise in the delete
-span:
+span. So this:
 #+begin_src org
   [[change:old text][new-text**comment**]]
 #+end_src
+becomes this:
 #+begin_example
 <span class="org-change-added">new text<span class="org-change-comment">comment</span></span><span class="org-change-deleted">old text</span>
 #+end_example
