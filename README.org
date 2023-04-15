@@ -136,12 +136,10 @@ becomes this:
 #+end_example
 You can then use CSS to display these classes as desired.
 
-The example above is generated with:
-#+name: html-example
-#+begin_src elisp
-  (org-change--export-html "old text" "new text" "comment")
-#+end_src
-which happens automatically when exporting.
+# used to generate the example above:
+# #+begin_src elisp
+#   (org-change--export-html "old text" "new text" "comment")
+# #+end_src
 
 * Customizing and extending
 ** Customization
