@@ -23,17 +23,17 @@
 ;;; Commentary:
 
 ;; This package provides a minor mode for tracking changes in org-mode
-;; files, by defining a new type of link, the change: link. Using the
+;; files, by defining a new type of link, the change: link.  Using the
 ;; functions org-change-add, org-change-delete, and
 ;; org-change-replace, you can mark text as constitution an addiion,
-;; deletion, or replacement to the text. These functions are bound by
+;; deletion, or replacement to the text.  These functions are bound by
 ;; default to C-` a, C-` d, and C-` r. Functions org-change-accept and
 ;; org-change-reject can be used to replace the change: link with the
-;; new and old text, respectively. These are bound to C-` o and C-` x.
+;; new and old text, respectively.  These are bound to C-` o and C-` x.
 ;;
 ;; To change key bindings and other settings, run M-x customize-group
-;; RET org-change. When exporting to LaTeX, changes are rendered using
-;; the "changes" package. See the package URL for more documentation.
+;; RET org-change.  When exporting to LaTeX, changes are rendered using
+;; the "changes" package.  See the package URL for more documentation.
 
 ;;; Code:
 
@@ -48,15 +48,13 @@
      (region-end))))
 
 (defun org-change--mark-change (old-text new-text)
-  "Deletes region and inserts change link."
+  "Delete region and insert change link with OLD-TEXT and NEW-TEXT."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
   (insert (format "[[change:%s][%s]]" old-text new-text)))
 
 (defun org-change-replace ()
-  "Mark the active region as old text that is being replaced by new
-text. You will be prompted for the new text, and the old text
-will be hidden in a change: link."
+  "Mark active region as old text and prompt new text."
   (interactive "")
   (let ((old-text (org-change--get-region)))
     (if (equal old-text nil)
@@ -66,9 +64,7 @@ will be hidden in a change: link."
        (read-string "New text: ")))))
 
 (defun org-change-delete ()
-  "Mark the active region as text that is being deleted. The text
-will be hidden in a change: link and a DELETED marker will be
-shown in its place."
+  "Mark active region as old text."
   (interactive "")
   (let ((old-text (org-change--get-region)))
     (if (equal old-text nil)
@@ -76,52 +72,50 @@ shown in its place."
       (org-change--mark-change old-text org-change--deleted-marker))))
 
 (defun org-change-add ()
-  "Mark the active region as text that is being added. If the
-region is not active, you will be prompted for text to add. The
-added text is shown in a change: link."
-  (interactive "")
+  "Mark the active region as new text.
+If there is no active
+region, ask for new text."   (interactive "")
   (org-change--mark-change
    ""
    (or (org-change--get-region)
        (read-string "New text: "))))
 
 (defun org-change--accept-or-reject (accept)
-  "Accept (t argument) or reject (nil argument) change at point."
-  (setq link-position (org-in-regexp
-		       "\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]"
-		       10))
-  (if link-position
-      (let ((old-text (match-string-no-properties 1))
-	    ;; to get new-text we also discard comments, if present: 
-	    (new-text (replace-regexp-in-string
-		       "\\*\\*.+\\*\\*$" ""
-		       (match-string-no-properties 2)))
-	    (beg (car link-position))
-	    (end (cdr link-position)))
-	(delete-region beg end)
-	(if accept
-	    (unless (equal new-text org-change--deleted-marker)
-	      (insert new-text))
-	  (insert old-text)))
-    (user-error "There is no change: link here")))
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point."
+  (let ((link-position (org-in-regexp
+			"\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]"
+			10)))
+    (if link-position
+	(let ((old-text (match-string-no-properties 1))
+	      ;; to get new-text we also discard comments, if present:
+	      (new-text (replace-regexp-in-string
+			 "\\*\\*.+\\*\\*$" ""
+			 (match-string-no-properties 2)))
+	      (beg (car link-position))
+	      (end (cdr link-position)))
+	  (delete-region beg end)
+	  (if accept
+	      (unless (equal new-text org-change--deleted-marker)
+		(insert new-text))
+	    (insert old-text)))
+      (user-error "There is no change: link here"))))
 
 (defun org-change-accept ()
-  "Accept the change at point, replacing the change: link with the
-new text and erasing the old text or DELETE marker."
+  "Accept change at point."
   (interactive "")
   (org-change--accept-or-reject t))
 
 (defun org-change-reject ()
-  "Reject the change at point, replacing the change: link with the
-old text and erasing the new text or DELETE marker."
+  "Reject change at point."
   (interactive "")
   (org-change--accept-or-reject nil))
 
-;; Tell org-mode about change: links 
+;; Tell org-mode about change: links
 
 (defface org-change-link-face
   '((t (:foreground "blue violet" :underline nil)))
-  "Face for org-change links.")
+  "Face for org-change links."
+  :group 'org-change)
 
 (org-link-set-parameters "change"
                          :follow #'org-change-open-link
@@ -130,17 +124,15 @@ old text and erasing the new text or DELETE marker."
 			 :face 'org-change-link-face)
 
 (defun org-change-open-link (path _)
-    ""
   nil)
 
 (defun org-change-store-link ()
-    ""
     nil)
 
 ;;; Export mechanism
 
 (defun org-change--export-latex (old-text new-text comment)
-  "Export a change link to Latex. "
+  "Export a change link to Latex."
   (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
     (cond ((equal old-text "")
 	   (format "\\added%s{%s}" comment new-text))
@@ -169,14 +161,16 @@ old text and erasing the new text or DELETE marker."
     (html . org-change--export-html))
   "List of exporters known to org-change.")
 
-(defun org-change-add-export-backend (backend function)
-  "Add an export backend to org-change. The function take arguments
+(defun org-change-add-export-backend (backend exporter)
+  "Add export backend to org-change.
+The EXPORTER function must take arguments
 old-text, new-text, and comment, and return a string appropriate
-to the backend."
-  (add-to-list org-change--exporters (backend . function)))
+to BACKEND."
+  (add-to-list org-change--exporters '(list backend . exporter)))
 
 (defun org-change-export-link (old-text new-text-raw backend _)
-  "Export a change link to a backend. This function operates within
+  "Export a change link to a backend.
+This function operates within
 the standard org-mode link export."
   (if (string-match
        "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$"
@@ -202,27 +196,27 @@ the standard org-mode link export."
   :group 'org)
 
 (defcustom org-change-add-key (kbd "C-` a")
-  "Keybinding for org-change-add."
+  "Keybinding for `org-change-add'."
   :type 'key-sequence
   :group 'org-change)
 
 (defcustom org-change-delete-key (kbd "C-` d")
-  "Keybinding for org-change-delete."
+  "Keybinding for `org-change-delete'."
   :type 'key-sequence
   :group 'org-change)
 
 (defcustom org-change-replace-key (kbd "C-` r")
-  "Keybinding for org-change-replace."
+  "Keybinding for `org-change-replace'."
   :type 'key-sequence
   :group 'org-change)
 
 (defcustom org-change-accept-key (kbd "C-` k")
-  "Keybinding for org-change-accept."
+  "Keybinding for `org-change-accept'."
   :type 'key-sequence
   :group 'org-change)
 
 (defcustom org-change-accept-key (kbd "C-` x")
-  "Keybinding for org-change-reject."
+  "Keybinding for `org-change-reject'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -232,7 +226,7 @@ the standard org-mode link export."
   :group 'org-change)
 
 (define-minor-mode org-change-mode
-  "Minor mode for tracking changes in org-mode files."
+  "Minor mode for tracking changes in `org-mode' files."
   :lighter " Chg"
   :group 'org-change
   :keymap (let ((map (make-sparse-keymap)))
