@@ -80,30 +80,16 @@ The following functionality is provided by org-mode, and is useful for
   work on longer edits.
 
 * Exporting
+
 ** LaTeX export
 
 When exporting to LaTeX, org-change uses the ~changes~ package, which
-must be included with a ~#+latex_header~ line:
-#+begin_src org
-  #+latex_header: \usepackage{changes}
-#+end_src
-org-change will then use the commands ~\added~, ~\deleted~, and
-~\replaced~ provided by this package.
-
-The content of the change link can contain org-mode notation like
-*bold* and /emphasis/, as well as Latex commands. However, some other
-features do not currently work. Notably, org-ref links must be
-translated manually to Latex. So this will *not* work:
-#+begin_src org
-  [[change:][Let's cite something cite:something]]
-#+end_src
-But this will:
-#+begin_src org
-  [[change:][Let's cite something \cite{something}]]
-#+end_src
+it includes automatically in the exported document. org-change will
+then use the commands ~\added~, ~\deleted~, and ~\replaced~ provided
+by this package.
 
 org-change supports some additional features of the ~changes~
-package. First, it supports comments, so that
+package. It supports comments, so that
 #+begin_src org
   [[change:old text][new text**A comment**]]
 #+end_src
@@ -121,6 +107,18 @@ which is exported to:
 #+begin_src org
   \replaced[comment=My comment,author=SG]{new text}{old text}
 #+end_src
+Lastly, you can set options for the ~changes~ package by setting the
+variable ~org-change-latex-options~. For example, you can place this
+code somewhere in your document and evaluate it:
+#+begin_src org
+  ,#+begin_src elisp
+    (setq org-change-latex-options "[markup=underline]")
+  ,#+end_src
+#+end_src
+Note that you need to include the brackets. The ~changes~ package also
+has configurations that are not set through package options, which you
+can set adding ~#+latex_header:~ lines.
+
 
 ** HTML export
 
@@ -143,6 +141,21 @@ You can then use CSS to display these classes as desired.
 # #+begin_src elisp
 #   (org-change--export-html "old text" "new text" "comment")
 # #+end_src
+
+** Producing a clean document
+
+When exporting, org-change looks first at the value of the variable
+~org-change-final~. This is initially ~nil~, meaning that the export
+proceeds according to the selected backend as detailed below. If
+~org-change-final~ is not ~nil~, then only the new text is exported,
+resulting in a "clean" new document without any markup. To achieve
+this, you can evaluate this code block before exporting:
+#+begin_src org
+  ,#+begin_src elisp :exports none :results silent
+    (setq org-change-final t)
+  ,#+end_src
+#+end_src
+This code can be anywhere in your file, even a ~:noexport:~ section.
 
 * Customizing and extending
 ** Customization
@@ -167,11 +180,21 @@ arguments: ~old-text~, ~new-text~, and ~comment~.
 
 * Bugs and limitations
 
-- org-ref links inside ~change~ links are not interpreted.
+- The content of the change link can contain org-mode notation like
+  *bold* and /emphasis/, as well as Latex code. However, some other
+  features do not currently work. Notably, org-ref links must be
+  translated manually to Latex. So this will *not* work:
+  #+begin_src org
+    [[change:][Let's cite something cite:&something1972]]
+  #+end_src
+  But this will:
+  #+begin_src org
+    [[change:][Let's cite something \cite{something1972}]]
+  #+end_src
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets especially with link that span multiple lines. Often ~M-q~
   takes care of this.
-
+  
 * Planned features
 
 - More export filters

@@ -168,6 +168,11 @@ old-text, new-text, and comment, and return a string appropriate
 to BACKEND."
   (add-to-list org-change--exporters '(list backend . exporter)))
 
+(defvar org-change-final
+  nil
+  "If nil, include changes when exporting, otherwise include only
+  new text.")
+
 (defun org-change-export-link (old-text new-text-raw backend _)
   "Export a change link to a backend.
 This function operates within
@@ -180,14 +185,30 @@ the standard org-mode link export."
 	(setq comment  (match-string 2 new-text-raw)))
     (setq new-text new-text-raw)
     (setq comment ""))
-  (let ((exporter (alist-get
-		   backend
-		   org-change--exporters
-		   nil
-		   nil 'org-export-derived-backend-p)))
-    (if exporter
-	(funcall exporter old-text new-text comment)
-      (error (format "Change links not supported in %s export" backend)))))
+  (if org-change-final
+      (if (equal new-text org-change--deleted-marker) "" new-text)
+    (let ((exporter (alist-get
+		     backend
+		     org-change--exporters
+		     nil
+		     nil
+		     'org-export-derived-backend-p)))
+      (if exporter
+	  (funcall exporter old-text new-text comment)
+	(error (format "Change links not supported in %s export" backend))))))
+
+(defun org-change-filter-final-output (text backend _)
+  (when (and (org-export-derived-backend-p backend 'latex)
+	     (not org-change-final))
+    (replace-regexp-in-string
+     "\\\\begin{document}"
+     (concat
+      "\\\\usepackage"
+      (when (boundp 'org-change-latex-options) org-change-latex-options)
+      "{changes}\n\\\\begin{document}")
+     text)))
+
+(add-to-list 'org-export-filter-final-output-functions #'org-change-filter-final-output)
 
 ;; Customizations and minor mode definitions
 
