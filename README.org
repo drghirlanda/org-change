@@ -7,7 +7,10 @@
 * Introduction
 
 org-change is a minor mode that (ab)uses the org-mode link syntax for
-a simple "track changes" feature similar to some word processors.
+a simple "track changes" feature similar to some word processors. The
+main use case for authors to highlight the changes between two
+versions of a document, such as before and after review by a third
+party.
 
 org-change provides:
 - A ~change~ link type to mark additions, deletions, and replacements.
