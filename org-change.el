@@ -37,6 +37,8 @@
 
 ;;; Code:
 
+(require 'org)
+
 (defvar org-change--deleted-marker "((DELETED))"
   "Placeholder for deleted text.")
 
@@ -110,29 +112,12 @@ region, ask for new text."   (interactive "")
   (interactive "")
   (org-change--accept-or-reject nil))
 
-;; Tell org-mode about change: links
-
-(defface org-change-link-face
-  '((t (:foreground "blue violet" :underline nil)))
-  "Face for org-change links."
-  :group 'org-change)
-
-(org-link-set-parameters "change"
-                         :follow #'org-change-open-link
-                         :export #'org-change-export-link
-                         :store #'org-change-store-link
-			 :face 'org-change-link-face)
-
-(defun org-change-open-link (path _)
-  nil)
-
-(defun org-change-store-link ()
-    nil)
-
 ;;; Export mechanism
 
 (defun org-change--export-latex (old-text new-text comment)
-  "Export a change link to Latex."
+  "Export a change link to Latex.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change
+link."
   (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
     (cond ((equal old-text "")
 	   (format "\\added%s{%s}" comment new-text))
@@ -141,20 +126,34 @@ region, ask for new text."   (interactive "")
 	  (t
 	   (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
 
-(defun org-change--export-html (old-text new-text comment)
-  "Export a change link to HTML. "
-  (defun make-span (class text)
+(defun org-change--make-span (class text)
+  "Return string <span class=\"CLASS\">TEXT</span> for HTML export."
     (if (equal text "")
 	""
       (format "<span class=\"%s\">%s</span>" class text)))
+
+(defun org-change--export-html (old-text new-text comment)
+  "Export a change link to HTML.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elemtns of the change
+link."
   (cond ((equal old-text "")
-	 (make-span "org-change-added" (concat new-text (make-span "org-change-comment" comment))))
+	 (org-change--make-span
+	  "org-change-added"
+	  (concat new-text (org-change--make-span
+			    "org-change-comment"
+			    comment))))
 	((equal new-text org-change--deleted-marker)
-	  (make-span "org-change-deleted" (concat old-text (make-span "org-change-comment" comment))))
+	 (org-change--make-span
+	  "org-change-deleted"
+	  (concat old-text (org-change--make-span
+			    "org-change-comment" comment))))
 	(t
 	 (concat
-	  (make-span "org-change-added" (concat new-text (make-span "org-change-comment" comment)))
-	  (make-span "org-change-deleted" old-text)))))
+	  (org-change--make-span
+	   "org-change-added"
+	   (concat new-text (org-change--make-span
+			     "org-change-comment" comment)))
+	  (org-change--make-span "org-change-deleted" old-text)))))
 
 (defvar org-change--exporters
   '((latex . org-change--export-latex)
@@ -163,41 +162,37 @@ region, ask for new text."   (interactive "")
 
 (defun org-change-add-export-backend (backend exporter)
   "Add export backend to org-change.
-The EXPORTER function must take arguments
-old-text, new-text, and comment, and return a string appropriate
-to BACKEND."
+The EXPORTER function must take arguments old-text, new-text, and
+comment, and return a string appropriate to BACKEND."
   (add-to-list org-change--exporters '(list backend . exporter)))
 
 (defvar org-change-final
   nil
-  "If nil, include changes when exporting, otherwise include only
-  new text.")
+  "If nil, include changes when exporting, otherwise include only new text.")
 
-(defun org-change-export-link (old-text new-text-raw backend _)
-  "Export a change link to a backend.
-This function operates within
-the standard org-mode link export."
-  (if (string-match
-       "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$"
-       new-text-raw)
-      (progn
-	(setq new-text (match-string 1 new-text-raw))
-	(setq comment  (match-string 2 new-text-raw)))
-    (setq new-text new-text-raw)
-    (setq comment ""))
-  (if org-change-final
-      (if (equal new-text org-change--deleted-marker) "" new-text)
-    (let ((exporter (alist-get
-		     backend
-		     org-change--exporters
-		     nil
-		     nil
-		     'org-export-derived-backend-p)))
-      (if exporter
-	  (funcall exporter old-text new-text comment)
-	(error (format "Change links not supported in %s export" backend))))))
-
+(defun org-change-export-link (old new backend _)
+  "Export a change link to a BACKEND.
+This function operates within the standard `org-mode' link export,
+but OLD and NEW replace link and description."
+  (let* ((test (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new))
+	 (new-text (if test (match-string 1 new) new))
+	 (comment (if test (match-string 2 new) "")))
+    (if org-change-final
+	(if (equal new-text org-change--deleted-marker) "" new-text)
+      (let ((exporter (alist-get
+		       backend
+		       org-change--exporters
+		       nil
+		       nil
+		       'org-export-derived-backend-p)))
+	(if exporter
+	    (funcall exporter old new comment)
+	  (error "Change links not supported in %s export" backend))))))
+  
 (defun org-change-filter-final-output (text backend _)
+  "Add the Latex package 'changes' to the Latex preamble.
+TEXT is the whole document and BACKEND is checked for being
+'latex or derived from 'latex."
   (when (and (org-export-derived-backend-p backend 'latex)
 	     (not org-change-final))
     (replace-regexp-in-string
@@ -241,6 +236,11 @@ the standard org-mode link export."
   :type 'key-sequence
   :group 'org-change)
 
+(defface org-change-link-face
+  '((t (:foreground "blue violet" :underline nil)))
+  "Face for org-change links."
+  :group 'org-change)
+
 (defcustom org-change-face 'org-change-link-face
   "Face for org-change links."
   :type 'face
@@ -255,7 +255,21 @@ the standard org-mode link export."
             (define-key map org-change-delete-key #'org-change-delete)
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
-            map))
+            map)
+  (if org-change
+      (org-link-set-parameters "change"
+                               :follow #'org-change-open-link
+                               :export #'org-change-export-link
+                               :store #'org-change-store-link
+			       :face 'org-change-link-face)))
+
+(defun org-change-open-link (_path _)
+  "Open a change link.  Currently does nothing."
+  nil)
+
+(defun org-change-store-link ()
+  "Store a change link.  Currently does nothing."
+  nil)
 
 (provide 'org-change)
 
