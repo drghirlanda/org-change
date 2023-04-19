@@ -246,6 +246,9 @@ TEXT is the whole document and BACKEND is checked for being
   :type 'face
   :group 'org-change)
 
+(defvar org-change
+  "Mode variable and function prefix for org-change")
+
 (define-minor-mode org-change-mode
   "Minor mode for tracking changes in `org-mode' files."
   :lighter " Chg"
