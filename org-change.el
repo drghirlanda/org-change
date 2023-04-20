@@ -85,7 +85,7 @@ region, ask for new text."   (interactive "")
 (defun org-change--accept-or-reject (accept)
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point."
   (let ((link-position (org-in-regexp
-			"\\[\\[change:\\(.*\\)\\]\\[\\(.*\\)\\]\\]"
+			"\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]"
 			10)))
     (if link-position
 	(let ((old-text (match-string-no-properties 1))
