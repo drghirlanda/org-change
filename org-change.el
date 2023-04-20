@@ -252,7 +252,7 @@ TEXT is the whole document and BACKEND is checked for being
 
 (defun org-change--fontify ()
   "Fontify change links.
-Called automatically when org-change-mode starts."
+Called automatically when org-change starts."
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)

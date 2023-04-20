@@ -6,40 +6,38 @@
 
 * Introduction
 
-org-change is a minor mode that (ab)uses the org-mode link syntax for
-a simple "track changes" feature similar to some word processors. The
-main use case for authors to highlight the changes between two
-versions of a document, such as before and after review by a third
-party.
-
-org-change provides:
+org-change is an Emacs minor mode that (ab)uses the org-mode link
+syntax for a simple "track changes" feature similar to some word
+processors. The main use case is for authors to highlight the changes
+between two versions of a document, such as before and after review by
+a third party. For this, org-change provides:
 - A ~change~ link type to mark additions, deletions, and replacements.
 - Functions and key bindings to manipulate ~change~ links.
-- Export filters to render ~change~ links (currently Latex and HTML).
+- Export filters for ~change~ links (currently Latex and HTML).
 
 * Installation
 
-Install manually from here for now, hopefully from MELPA soon.
+Install from MELPA, or manually from here.
 
 * ~change~ link syntax
 
-To indicate that "old text" is being replaced by "new text," the
-~change~ link syntax is:
+To indicate that "old text" is being replaced by "new text,"
+org-change defines the following ~change~ link syntax:
 #+begin_src org
   [[change:old text][new text]]
 #+end_src
 The idea is that you end up seeing only "new text," because org-mode
 (typically) hides the part of the link within the first pair of
-brackets. To indicate an addition, just omit ~old text~:
+brackets. To indicate an addition, org-change just omits ~old text~:
 #+begin_src org
   [[change:][new text]]
 #+end_src
-To indicate a deletion, use ~((DELETED))~ as ~new text~:
+To indicate a deletion, org-change uses ~((DELETED))~ as ~new text~:
 #+begin_src org
   [[change:old text][((DELETED))]]
 #+end_src
-You can also embed comments in change links by surrounding them with
-double stars at the end of ~new text~:
+You can embed comments in change links by surrounding them with double
+stars at the end of ~new text~:
 #+begin_src org
   [[change:old text][new text**A comment**]]
 #+end_src
@@ -47,22 +45,23 @@ All this by itself is not very useful, but read on.
 
 * ~change~ link manipulation
 
-org-change provides key sequences to easily insert and manipulate
-change links. All key sequences start with ~C-`~ (control + left
-quote). Not the prettiest, but, Emacs having been around for a while,
-few control prefixes are free. It's the curse of keymensionality. It
-can be [[Customization][customized]].
+org-change provides key sequences to easily manipulate ~change~
+links. All key sequences start with ~C-`~ (control + left quote). Not
+the prettiest, but few control prefixes are free. It's the curse of
+keymensionality. To change it, see section [[Customizing and
+extending]].
 
-You can mark additions, deletions, and replacements like this:
+The key sequences are:
 - ~C-` a~ :: for additions.
 - ~C-` d~ :: for deletions.
 - ~C-` r~ :: for replacements.
-These actions operate on the active region. For example, in the case
-of replacement, the selected text is marked for deletion, and you are
-prompted for new text. You can also use ~C-` a~ without marking a
-region, in which case you are prompted for new text.
+All these act on the active region. For example, in the case of
+replacement, the region is marked for deletion, and you are prompted
+for new text. You can also use ~C-` a~ without marking a region, in
+which case you are prompted for new text.
 
-Key sequences are also provided to accept and reject the change under the cursor:
+Key sequences are also provided to accept or reject the change under
+the cursor:
 - ~C-` k~ :: to accept.
 - ~C-` x~ :: to reject.
 "Accept" means to delete the change link (including any comments) and
@@ -80,7 +79,6 @@ The following functionality is provided by org-mode, and is useful for
   work on longer edits.
 
 * Exporting
-
 ** LaTeX export
 
 When exporting to LaTeX, org-change uses the ~changes~ package, which
@@ -117,8 +115,7 @@ code somewhere in your document and evaluate it:
 #+end_src
 Note that you need to include the brackets. The ~changes~ package also
 has configurations that are not set through package options, which you
-can set adding ~#+latex_header:~ lines.
-
+can set through ~#+latex_header:~ lines.
 
 ** HTML export
 
@@ -133,7 +130,15 @@ span. So this:
 #+end_src
 becomes this:
 #+begin_example
-<span class="org-change-added">new text<span class="org-change-comment">comment</span></span><span class="org-change-deleted">old text</span>
+<span class="org-change-added">
+  new text
+  <span class="org-change-comment">
+    comment
+  </span>
+</span>
+<span class="org-change-deleted">
+  old text
+</span>
 #+end_example
 You can then use CSS to display these classes as desired.
 
@@ -144,11 +149,11 @@ You can then use CSS to display these classes as desired.
 
 ** Producing a clean document
 
-When exporting, org-change looks first at the value of the variable
+When exporting, org-change looks first at the variable
 ~org-change-final~. This is initially ~nil~, meaning that the export
-proceeds according to the selected backend as detailed below. If
+proceeds according to the selected backend as detailed above. If
 ~org-change-final~ is not ~nil~, then only the new text is exported,
-resulting in a "clean" new document without any markup. To achieve
+resulting in a "clean" document without change markup. To achieve
 this, you can evaluate this code block before exporting:
 #+begin_src org
   ,#+begin_src elisp :exports none :results silent
@@ -176,7 +181,10 @@ To add an export format, add something like this to your org file:
 #+end_src
 where ~backend~ is a backend known to org-mode and ~backend-function~
 is a function that produces the desired string from three string
-arguments: ~old-text~, ~new-text~, and ~comment~.
+arguments: ~old-text~, ~new-text~, and ~comment~. The function can
+figure out whether the change is an addition, deletion, or replacement
+by looking at these variables: for additions, ~old-text~ is empty; for
+deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
 
 * Bugs and limitations
 
@@ -193,16 +201,16 @@ arguments: ~old-text~, ~new-text~, and ~comment~.
   #+end_src
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets especially with link that span multiple lines. Often ~M-q~
-  takes care of this.
+  takes care of this, or you can enable ~visual-line-mode~ and keep
+  paragraphs as single unbroken lines.
   
 * Planned features
 
-- More export filters
-- A function ~org-change-accept-all~ to process all change links in the
-  buffer
-- Make it possible to select final or draft when exporting. Final just
-  uses new text.
-- A function to manipulate comment.
+- More export filters.
+- Simple HTML CSS for change markup.  
+- A function ~org-change-accept-all~ to process all change links in
+  the buffer.
+- A function to manipulate comments.
   
 * Notes
 
