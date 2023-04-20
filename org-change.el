@@ -175,6 +175,8 @@ comment, and return a string appropriate to BACKEND."
   "Export a change link to a BACKEND.
 This function operates within the standard `org-mode' link export,
 but OLD and NEW replace link and description."
+  (if (or (eq old nil) (eq new nil))
+      (user-error "Malformed change: link with:\nold text = %s\nnew-text: %s" old new))
   (let* ((test (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new))
 	 (new-text (if test (match-string 1 new) new))
 	 (comment (if test (match-string 2 new) "")))
@@ -188,7 +190,7 @@ but OLD and NEW replace link and description."
 		       'org-export-derived-backend-p)))
 	(if exporter
 	    (funcall exporter old new comment)
-	  (error "Change links not supported in %s export" backend))))))
+	  (user-error "Change links not supported in %s export" backend))))))
   
 (defun org-change-filter-final-output (text backend _)
   "Add the Latex package 'changes' to the Latex preamble.
