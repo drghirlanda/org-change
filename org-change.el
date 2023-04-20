@@ -38,6 +38,7 @@
 ;;; Code:
 
 (require 'org)
+(require 'font-lock)
 
 (defvar org-change--deleted-marker "((DELETED))"
   "Placeholder for deleted text.")
@@ -249,6 +250,19 @@ TEXT is the whole document and BACKEND is checked for being
 (defvar org-change
   "Mode variable and function prefix for org-change")
 
+(defun org-change--fontify ()
+  "Fontify change links.
+Called automatically when org-change-mode starts."
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)
+      (let ((beg (match-beginning 0))
+	    (end (match-end 0)))
+	(message "Fontifying change links (%d%%)" (* 100 (/ (float end) (point-max))))
+	(font-lock-fontify-region beg end)
+	(goto-char end))))
+  (message ""))
+      
 (define-minor-mode org-change-mode
   "Minor mode for tracking changes in `org-mode' files."
   :lighter " Chg"
@@ -260,12 +274,14 @@ TEXT is the whole document and BACKEND is checked for being
             (define-key map org-change-accept-key #'org-change-accept)
             (define-key map org-change-reject-key #'org-change-reject)
             map)
-  (if org-change
-      (org-link-set-parameters "change"
-                               :follow #'org-change-open-link
-                               :export #'org-change-export-link
-                               :store #'org-change-store-link
-			       :face 'org-change-link-face)))
+  (when org-change
+    (org-link-set-parameters
+     "change"
+     :follow #'org-change-open-link
+     :export #'org-change-export-link
+     :store #'org-change-store-link
+     :face 'org-change-link-face)
+    (org-change--fontify)))
 
 (defun org-change-open-link (_path _)
   "Open a change link.  Currently does nothing."
