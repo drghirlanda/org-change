@@ -231,7 +231,7 @@ TEXT is the whole document and BACKEND is checked for being
   :type 'key-sequence
   :group 'org-change)
 
-(defcustom org-change-accept-key (kbd "C-` x")
+(defcustom org-change-reject-key (kbd "C-` x")
   "Keybinding for `org-change-reject'."
   :type 'key-sequence
   :group 'org-change)
@@ -258,6 +258,7 @@ TEXT is the whole document and BACKEND is checked for being
             (define-key map org-change-delete-key #'org-change-delete)
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
+            (define-key map org-change-reject-key #'org-change-reject)
             map)
   (if org-change
       (org-link-set-parameters "change"
