@@ -117,6 +117,12 @@ Note that you need to include the brackets. The ~changes~ package also
 has configurations that are not set through package options, which you
 can set through ~#+latex_header:~ lines.
 
+The ~changes~ package causes errors with some LaTeX commands. This can
+happen, for example, when ~\cite~ and similar commands appear in a
+change. To fix these problems, you can try to add ~\protect~ or
+~\noexpand~ before the offending command, or to wrap the command in an
+~\mbox~.
+
 ** HTML export
 
 When exporting to HTML, org-change produces ~<span>~ elements with
