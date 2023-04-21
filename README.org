@@ -67,7 +67,14 @@ the cursor:
 "Accept" means to delete the change link (including any comments) and
 insert the new text (or nothing, if the change is a
 deletion). "Reject" means to delete the change link and insert the old
-text (or nothing, if the change is an addition).
+text (or nothing, if the change is an addition). 
+
+If there is no change under the cursor, accept and reject work on all
+change links in the active region. If there is no active region,
+nothing happens. You can accept or reject all changes in a document by
+selecting the whole buffer, but note that this deletes all changes. If
+you just want to export a clean manuscript, see section [[Producing a
+clean document]].
 
 The following functionality is provided by org-mode, and is useful for
 ~change~ links:
@@ -212,12 +219,11 @@ deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
   
 * Planned features
 
-- More export filters.
 - Simple HTML CSS for change markup.  
-- A function ~org-change-accept-all~ to process all change links in
-  the buffer.
-- A function to manipulate comments.
-  
+- More export filters?
+
+Send suggestions to [[mailto:drghirlanda@gmail.com][drghirlanda@gmail.com]].
+
 * Notes
 
 To get started on org-change, I described some features to ChatGPT

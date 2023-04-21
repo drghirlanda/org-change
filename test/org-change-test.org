@@ -29,8 +29,7 @@ recognized: \(a=1\).]]
 
 [[change:pippo][((DELETED))]]
 
-
-
+This is to test accept [[change:][and reject]] in a region with [[change:one change][multiple changes]]. 
 
 
 

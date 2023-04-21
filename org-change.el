@@ -84,10 +84,10 @@ region, ask for new text."   (interactive "")
        (read-string "New text: "))))
 
 (defun org-change--accept-or-reject (accept)
-  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point."
-  (let ((link-position (org-in-regexp
-			"\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]"
-			10)))
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
+If there is no change at point, accept or reject all changes in the active region."
+  (let* ((link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]")
+	 (link-position (org-in-regexp link-regexp 10)))
     (if link-position
 	(let ((old-text (match-string-no-properties 1))
 	      ;; to get new-text we also discard comments, if present:
@@ -101,7 +101,17 @@ region, ask for new text."   (interactive "")
 	      (unless (equal new-text org-change--deleted-marker)
 		(insert new-text))
 	    (insert old-text)))
-      (user-error "There is no change: link here"))))
+      (when (use-region-p)
+	(save-excursion
+	  (save-restriction
+	    (goto-char (region-beginning))
+	    (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)
+	      (let ((beg (match-beginning 0)))
+		(goto-char beg)
+		(org-change--accept-or-reject accept)
+		;; go back to beg because buffer contents have changed
+		;; and match-end is not reliable:
+		(goto-char beg)))))))))
 
 (defun org-change-accept ()
   "Accept change at point."
@@ -240,7 +250,7 @@ TEXT is the whole document and BACKEND is checked for being
   :group 'org-change)
 
 (defface org-change-link-face
-  '((t (:foreground "blue violet" :underline nil)))
+  '((t (:background "lavender blush" :underline nil)))
   "Face for org-change links."
   :group 'org-change)
 
