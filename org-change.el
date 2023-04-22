@@ -85,12 +85,13 @@ region, ask for new text."   (interactive "")
 
 (defun org-change--accept-or-reject (accept)
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
-If there is no change at point, accept or reject all changes in the active region."
+If there is no change at point, accept or reject all changes in
+the active region."
   (let* ((link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]")
 	 (link-position (org-in-regexp link-regexp 10)))
-    (if link-position
+    (if link-position 
 	(let ((old-text (match-string-no-properties 1))
-	      ;; to get new-text we also discard comments, if present:
+	      ;; to get new-text we discard comments:
 	      (new-text (replace-regexp-in-string
 			 "\\*\\*.+\\*\\*$" ""
 			 (match-string-no-properties 2)))
@@ -98,19 +99,19 @@ If there is no change at point, accept or reject all changes in the active regio
 	      (end (cdr link-position)))
 	  (delete-region beg end)
 	  (if accept
-	      (unless (equal new-text org-change--deleted-marker)
-		(insert new-text))
-	    (insert old-text)))
+	      (if (equal new-text org-change--deleted-marker)
+		  (insert old-text))
+	    (insert new-text)))
       (when (use-region-p)
 	(save-excursion
 	  (save-restriction
 	    (goto-char (region-beginning))
-	    (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)
+	    (while (re-search-forward link-regexp nil t)
 	      (let ((beg (match-beginning 0)))
 		(goto-char beg)
 		(org-change--accept-or-reject accept)
-		;; go back to beg because buffer contents have changed
-		;; and match-end is not reliable:
+		;; go to beg because buffer has changed and match-end
+		;; is not reliable:
 		(goto-char beg)))))))))
 
 (defun org-change-accept ()
