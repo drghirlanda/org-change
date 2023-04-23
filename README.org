@@ -213,9 +213,13 @@ deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
     [[change:][Let's cite something \cite{something1972}]]
   #+end_src
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
-  brackets especially with link that span multiple lines. Often ~M-q~
+  brackets especially with link that span multiple lines. Sometimes ~M-q~
   takes care of this, or you can enable ~visual-line-mode~ and keep
   paragraphs as single unbroken lines.
+- LaTeX export is not fully compatible with HTML export if you use the
+  extended comment syntax. That is, HTML export does not handle extra
+  arguments like "author=SG," which are a feature of the ~changes~
+  package for LaTeX.
   
 * Planned features
 
