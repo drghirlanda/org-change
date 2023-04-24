@@ -38,6 +38,7 @@
 ;;; Code:
 
 (require 'org)
+(require 'ox)
 (require 'font-lock)
 
 (defvar org-change--deleted-marker "((DELETED))"
@@ -89,7 +90,7 @@ If there is no change at point, accept or reject all changes in
 the active region."
   (let* ((link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]")
 	 (link-position (org-in-regexp link-regexp 10)))
-    (if link-position 
+    (if link-position
 	(let ((old-text (match-string-no-properties 1))
 	      ;; to get new-text we discard comments:
 	      (new-text (replace-regexp-in-string
@@ -168,15 +169,15 @@ link."
 	  (org-change--make-span "org-change-deleted" old-text)))))
 
 (defvar org-change--exporters
-  '((latex . org-change--export-latex)
-    (html . org-change--export-html))
-  "List of exporters known to org-change.")
+  '((latex . org-change--export-latex))
+;    (html . org-change--export-html))
+  "List of exporters known to Org Change.")
 
 (defun org-change-add-export-backend (backend exporter)
-  "Add export backend to org-change.
+  "Add export backend to Org Change.
 The EXPORTER function must take arguments old-text, new-text, and
 comment, and return a string appropriate to BACKEND."
-  (add-to-list org-change--exporters '(list backend . exporter)))
+  (add-to-list 'org-change--exporters (cons backend exporter)))
 
 (defvar org-change-final
   nil
@@ -186,7 +187,7 @@ comment, and return a string appropriate to BACKEND."
   "Export a change link to a BACKEND.
 This function operates within the standard `org-mode' link export,
 but OLD and NEW replace link and description."
-  (if (or (eq old nil) (eq new nil))
+  (if (or (not old) (not new))
       (user-error "Malformed change: link with:\nold text = %s\nnew-text: %s" old new))
   (let* ((test (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new))
 	 (new-text (if test (match-string 1 new) new))
@@ -204,7 +205,7 @@ but OLD and NEW replace link and description."
 	  (user-error "Change links not supported in %s export" backend))))))
   
 (defun org-change-filter-final-output (text backend _)
-  "Add the Latex package 'changes' to the Latex preamble.
+  "Add the Latex package changes.sty to the Latex preamble.
 TEXT is the whole document and BACKEND is checked for being
 'latex or derived from 'latex."
   (when (and (org-export-derived-backend-p backend 'latex)
@@ -222,7 +223,7 @@ TEXT is the whole document and BACKEND is checked for being
 ;; Customizations and minor mode definitions
 
 (defgroup org-change nil
-  "Customization options for org-change."
+  "Customization options for Org Change."
   :group 'org)
 
 (defcustom org-change-add-key (kbd "C-` a")
@@ -252,11 +253,11 @@ TEXT is the whole document and BACKEND is checked for being
 
 (defface org-change-link-face
   '((t (:background "lavender blush" :underline nil)))
-  "Face for org-change links."
+  "Face for Org Change links."
   :group 'org-change)
 
 (defcustom org-change-face 'org-change-link-face
-  "Face for org-change links."
+  "Face for Org Change links."
   :type 'face
   :group 'org-change)
 
@@ -265,7 +266,7 @@ TEXT is the whole document and BACKEND is checked for being
 
 (defun org-change--fontify ()
   "Fontify change links.
-Called automatically when org-change starts."
+Called automatically when Org Change starts."
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)
