@@ -201,7 +201,7 @@ but OLD and NEW replace link and description."
 		       nil
 		       'org-export-derived-backend-p)))
 	(if exporter
-	    (funcall exporter old new comment)
+	    (funcall exporter old new-text comment)
 	  (user-error "Change links not supported in %s export" backend))))))
   
 (defun org-change-filter-final-output (text backend _)
