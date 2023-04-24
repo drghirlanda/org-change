@@ -169,8 +169,8 @@ link."
 	  (org-change--make-span "org-change-deleted" old-text)))))
 
 (defvar org-change--exporters
-  '((latex . org-change--export-latex))
-;    (html . org-change--export-html))
+  '((latex . org-change--export-latex)
+    (html . org-change--export-html))
   "List of exporters known to Org Change.")
 
 (defun org-change-add-export-backend (backend exporter)
