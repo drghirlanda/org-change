@@ -1,4 +1,4 @@
-#+title: org-change: Track changes in org-mode
+#+title: org-change: Annotate changes in org-mode
 #+author: Stefano Ghirlanda
 #+email: drghirlanda@gmail.com
 #+options: toc:nil ':t

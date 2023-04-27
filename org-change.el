@@ -1,4 +1,4 @@
-;;; org-change.el --- Track changes in org-mode files -*- lexical-binding: t; -*-
+;;; org-change.el --- Annotate changes in org-mode files -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
@@ -22,7 +22,7 @@
 
 ;;; Commentary:
 
-;; This package provides a minor mode for tracking changes in org-mode
+;; This package provides a minor mode for annotating changes in org-mode
 ;; files, by defining a new type of link, the change: link.  Using the
 ;; functions org-change-add, org-change-delete, and
 ;; org-change-replace, you can mark text as constitution an addiion,
@@ -278,7 +278,7 @@ Called automatically when Org Change starts."
   (message ""))
       
 (define-minor-mode org-change-mode
-  "Minor mode for tracking changes in `org-mode' files."
+  "Minor mode for annotating changes in `org-mode' files."
   :lighter " Chg"
   :group 'org-change
   :keymap (let ((map (make-sparse-keymap)))
@@ -299,11 +299,11 @@ Called automatically when Org Change starts."
 
 (defun org-change-open-link (_path _)
   "Open a change link.  Currently does nothing."
-  nil)
+  (message "Opening a change link currently does nothing"))
 
 (defun org-change-store-link ()
   "Store a change link.  Currently does nothing."
-  nil)
+  (message "Storing a change link currently does nothing"))
 
 (provide 'org-change)
 
