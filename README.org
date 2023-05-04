@@ -201,6 +201,8 @@ deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
 
 * Bugs and limitations
 
+Please submit bugs as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
+
 - The content of the change link can contain org-mode notation like
   *bold* and /emphasis/, as well as Latex code. However, some other
   features do not currently work. Notably, org-ref links must be
@@ -223,10 +225,10 @@ deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
   
 * Planned features
 
+Please submit feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
+
 - Simple HTML CSS for change markup.  
 - More export filters?
-
-Send suggestions to [[mailto:drghirlanda@gmail.com][drghirlanda@gmail.com]].
 
 * Notes
 

@@ -77,8 +77,8 @@
 
 (defun org-change-add ()
   "Mark the active region as new text.
-If there is no active
-region, ask for new text."   (interactive "")
+If there is no active region, ask for new text."
+  (interactive "")
   (org-change--mark-change
    ""
    (or (org-change--get-region)
@@ -101,8 +101,8 @@ the active region."
 	  (delete-region beg end)
 	  (if accept
 	      (if (equal new-text org-change--deleted-marker)
-		  (insert old-text))
-	    (insert new-text)))
+		  (insert old-text)
+		(insert new-text))))
       (when (use-region-p)
 	(save-excursion
 	  (save-restriction

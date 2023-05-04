@@ -14,7 +14,7 @@ Replaced text in [[change:a header][the text]].
 ]]
 [[change:Deleted text][((DELETED))]]
 
-[[change:][Let's see if *org mode commands* and \LaTeX commands keep being
+[[change:][Let's see if *org mode markup* and \LaTeX commands keep being
 recognized: \(a=1\).]]
 
 [[change:][New text]]
@@ -29,7 +29,7 @@ recognized: \(a=1\).]]
 
 [[change:pippo][((DELETED))]]
 
-This is to test accept [[change:][and reject]] in a region with [[change:one change][multiple changes]]. 
+This is to test accept [[change:only][and reject]] in a region with [[change:one change][multiple changes]]. 
 
 
 
