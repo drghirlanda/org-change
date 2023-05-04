@@ -11,4 +11,6 @@
 *.~undo-tree
 
 # Other
-org-change.tex
+*.tex
+*.soc
+*.loc
