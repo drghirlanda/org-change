@@ -100,9 +100,9 @@ the active region."
 	      (end (cdr link-position)))
 	  (delete-region beg end)
 	  (if accept
-	      (if (equal new-text org-change--deleted-marker)
-		  (insert old-text)
-		(insert new-text))))
+	      (unless(equal new-text org-change--deleted-marker)
+		(insert new-text))
+	    (insert old-text)))
       (when (use-region-p)
 	(save-excursion
 	  (save-restriction
