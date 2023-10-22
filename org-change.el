@@ -41,7 +41,10 @@
 (require 'ox)
 (require 'font-lock)
 
-(defvar org-change--deleted-marker "((DELETED))"
+(defvar org-change--link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]\\(\\1?\\)"
+  "Regexp to match change links.")
+
+(defvar org-change--deleted-marker "✗"
   "Placeholder for deleted text.")
 
 (defun org-change--get-region ()
@@ -51,11 +54,20 @@
      (region-beginning)
      (region-end))))
 
+(defun org-change--propertize-deleted (beg end)
+  "Mark text between BEG and END as deleted text."
+  (put-text-property beg (point) 'font-lock-face '(:foreground "gray"))
+  (put-text-property beg (point) 'read-only t))
+
 (defun org-change--mark-change (old-text new-text)
   "Delete region and insert change link with OLD-TEXT and NEW-TEXT."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
-  (insert (format "[[change:%s][%s]]" old-text new-text)))
+  (insert (format "[[change:%s][%s]]" old-text new-text))
+  (when (and (not (equal old-text nil)) org-change-show-old)
+    (let ((beg (point)))
+      (insert old-text)
+      (org-change--propertize-deleted beg (point)))))
 
 (defun org-change-replace ()
   "Mark active region as old text and prompt new text."
@@ -88,8 +100,8 @@ If there is no active region, ask for new text."
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
 If there is no change at point, accept or reject all changes in
 the active region."
-  (let* ((link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]")
-	 (link-position (org-in-regexp link-regexp 10)))
+  (let* ((link-position (org-in-regexp org-change--link-regexp 10))
+	 (inhibit-read-only t))
     (if link-position
 	(let ((old-text (match-string-no-properties 1))
 	      ;; to get new-text we discard comments:
@@ -226,6 +238,11 @@ TEXT is the whole document and BACKEND is checked for being
   "Customization options for Org Change."
   :group 'org)
 
+(defcustom org-change-show-old t
+  "If non-nil, show deleted/replaced text alongside new text."
+  :type 'boolean
+  :group 'org-change)
+
 (defcustom org-change-add-key (kbd "C-` a")
   "Keybinding for `org-change-add'."
   :type 'key-sequence
@@ -269,11 +286,14 @@ TEXT is the whole document and BACKEND is checked for being
 Called automatically when Org Change starts."
   (save-excursion
     (goto-char (point-min))
-    (while (re-search-forward "\\[\\[change:[^]]*?\\]\\[[^]]*?\\]\\]" nil t)
+    (while (re-search-forward org-change--link-regexp nil t)
       (let ((beg (match-beginning 0))
-	    (end (match-end 0)))
+	    (end (match-end 0))
+	    (beg-show (match-beginning 3))
+	    (end-show (match-end 3)))
 	(message "Fontifying change links (%d%%)" (* 100 (/ (float end) (point-max))))
 	(font-lock-fontify-region beg end)
+	(org-change--propertize-deleted beg-show end-show)
 	(goto-char end))))
   (message ""))
       
