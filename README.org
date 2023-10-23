@@ -34,10 +34,11 @@ brackets. To indicate an addition, org-change just omits ~old text~:
 #+end_src
 To indicate a deletion, org-change uses a cross as ~new text~:
 #+begin_src org
-  [[change:old text][\(\times\)]
+  [[change:old text][X]
 #+end_src
-The cross is a unicode character. If you cannot or don't want to use
-unicode, you can customize the marker as explained below.
+In Emacs, the cross is a unicode character, easy to tell apart from
+the uppercase X). If you cannot or don't want to use unicode, you can
+customize the marker as explained below.
 
 You can embed comments in change links by surrounding them with double
 stars at the end of ~new text~:
