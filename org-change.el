@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.3
+;; Version: 0.3.1
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -49,7 +49,7 @@
   :type 'string
   :group 'org-change)
 
-(defvar org-change-update-deleted-marker ()
+(defun org-change-update-deleted-marker ()
   "Update the marker for deleted/replaced text to the current setting.
 
 This function is used to update change links to use the current
