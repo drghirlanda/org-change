@@ -93,7 +93,9 @@ The following functionality is provided by org-mode, and is useful for
 By default, org-change hides replaced text and shows deleted text with
 a cross. You can choose to show this text by setting
 ~org-change-show-deleted-text~ to a non-nil value. The text will be
-shown in the customizable face ~org-change-deleted-face~.
+shown in the customizable face ~org-change-deleted-face~. This is
+similar to some word processors, where deleted text is shown as
+strike-through (but you don't have to use strike-through).
 
 * Re-fontifying
 

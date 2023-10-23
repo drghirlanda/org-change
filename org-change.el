@@ -238,7 +238,7 @@ TEXT is the whole document and BACKEND is checked for being
   "Customization options for Org Change."
   :group 'org)
 
-(defcustom org-change-show-deleted t
+(defcustom org-change-show-deleted nil
   "If non-nil, show deleted/replaced text alongside new text. The deleted/replaced text is shown in the face `org-change-deleted-face', which defaults to gray and can also be cusotmized. The deleted/replaced text is made read-only to avoid confusion."
   :type 'boolean
   :group 'org-change)
