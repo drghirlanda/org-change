@@ -100,7 +100,7 @@ strike-through (but you don't have to use strike-through).
 
 * Re-fontifying
 
-If you change faces (see below), you can apply the new settings by
+If you change faces (see Customization), you can apply the new settings by
 calling ~org-change-fontiy~, which by default is bound to ~C-` f~.
 
 * Exporting
