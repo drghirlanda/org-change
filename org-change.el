@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.1
+;; Version: 0.2
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
