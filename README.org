@@ -195,11 +195,20 @@ This code can be anywhere in your file, even a ~:noexport:~ section.
 * Customizing and extending
 ** Customization
 
-The key sequences, the deleted marker, and the faces used to display
-change links can be changed through the customize interface:
+The key sequences, the deleted/replaced text marker, and the faces
+used to display change links can be changed through the customize
+interface:
 #+begin_src org
   M-x customize-group RET org-change
 #+end_src
+
+If you change you mind about the marker for deleted/replaced text, you
+can customize ~org-change-deleted-marker~, then run
+#+begin_src org
+  M-x org-change-update-deleted-marker
+#+end_src
+in each buffer that you want to switch to the new marker. This
+function will prompt you for the old marker.
 
 ** Adding exporters
 
