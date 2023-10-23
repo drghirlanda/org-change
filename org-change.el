@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.2
+;; Version: 0.3
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -44,9 +44,25 @@
 (defvar org-change--link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]\\(\\1?\\)"
   "Regexp to match change links.")
 
-(defvar org-change--deleted-marker "✗"
-  "Placeholder for deleted text.")
+(defcustom org-change-deleted-marker "✗"
+  "Placeholder for deleted text."
+  :type 'string
+  :group 'org-change)
 
+(defvar org-change-update-deleted-marker ()
+  "Update the marker for deleted/replaced text to the current setting.
+
+This function is used to update change links to use the current
+setting of the marker used for deleted/replaced text. The user is
+prompted for the deleted marker string to be replaced."
+  (interactive)
+  (let ((old-marker (read-string "Old marker: ")))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward org-change--link-regexp nil t)
+	(if (equal (match-string 2) old-marker)
+	    (replace-match org-change-deleted-marker t t nil 2))))))
+  
 (defun org-change--get-region ()
   "Return content of active region or nil."
   (when (use-region-p)
@@ -85,7 +101,7 @@
   (let ((old-text (org-change--get-region)))
     (if (equal old-text nil)
 	(user-error "Select text to be deleted")
-      (org-change--mark-change old-text org-change--deleted-marker))))
+      (org-change--mark-change old-text org-change-deleted-marker))))
 
 (defun org-change-add ()
   "Mark the active region as new text.
@@ -112,14 +128,14 @@ the active region."
 	      (end (cdr link-position)))
 	  (delete-region beg end)
 	  (if accept
-	      (unless(equal new-text org-change--deleted-marker)
+	      (unless(equal new-text org-change-deleted-marker)
 		(insert new-text))
 	    (insert old-text)))
       (when (use-region-p)
 	(save-excursion
 	  (save-restriction
 	    (goto-char (region-beginning))
-	    (while (re-search-forward link-regexp nil t)
+	    (while (re-search-forward org-change--link-regexp nil t)
 	      (let ((beg (match-beginning 0)))
 		(goto-char beg)
 		(org-change--accept-or-reject accept)
@@ -146,7 +162,7 @@ link."
   (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
     (cond ((equal old-text "")
 	   (format "\\added%s{%s}" comment new-text))
-	  ((equal new-text org-change--deleted-marker)
+	  ((equal new-text org-change-deleted-marker)
 	   (format "\\deleted%s{%s}" comment old-text))
 	  (t
 	   (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
@@ -167,7 +183,7 @@ link."
 	  (concat new-text (org-change--make-span
 			    "org-change-comment"
 			    comment))))
-	((equal new-text org-change--deleted-marker)
+	((equal new-text org-change-deleted-marker)
 	 (org-change--make-span
 	  "org-change-deleted"
 	  (concat old-text (org-change--make-span
@@ -205,7 +221,7 @@ but OLD and NEW replace link and description."
 	 (new-text (if test (match-string 1 new) new))
 	 (comment (if test (match-string 2 new) "")))
     (if org-change-final
-	(if (equal new-text org-change--deleted-marker) "" new-text)
+	(if (equal new-text org-change-deleted-marker) "" new-text)
       (let ((exporter (alist-get
 		       backend
 		       org-change--exporters
@@ -219,7 +235,7 @@ but OLD and NEW replace link and description."
 (defun org-change-filter-final-output (text backend _)
   "Add the Latex package changes.sty to the Latex preamble.
 TEXT is the whole document and BACKEND is checked for being
-'latex or derived from 'latex."
+\\='latex or derived from \\='latex."
   (when (and (org-export-derived-backend-p backend 'latex)
 	     (not org-change-final))
     (replace-regexp-in-string
@@ -239,7 +255,12 @@ TEXT is the whole document and BACKEND is checked for being
   :group 'org)
 
 (defcustom org-change-show-deleted nil
-  "If non-nil, show deleted/replaced text alongside new text. The deleted/replaced text is shown in the face `org-change-deleted-face', which defaults to gray and can also be cusotmized. The deleted/replaced text is made read-only to avoid confusion."
+  "If non-nil, show deleted/replaced text alongside new text.
+
+The deleted/replaced text is shown in the face
+ `org-change-deleted-face', which defaults to gray and can also
+ be cusotmized. The deleted/replaced text is made read-only to
+ avoid confusion."
   :type 'boolean
   :group 'org-change)
 
