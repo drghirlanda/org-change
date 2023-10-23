@@ -88,6 +88,18 @@ The following functionality is provided by org-mode, and is useful for
   the hidden part of every link in the buffer. This can be useful to
   work on longer edits.
 
+* Showing deleted text
+
+By default, org-change hides replaced text and shows deleted text with
+a cross. You can choose to show this text by setting
+~org-change-show-deleted-text~ to a non-nil value. The text will be
+shown in the customizable face ~org-change-deleted-face~.
+
+* Re-fontifying
+
+If you change faces (see below), you can apply the new settings by
+calling ~org-change-fontiy~, which by default is bound to ~C-` f~.
+
 * Exporting
 ** LaTeX export
 
@@ -178,13 +190,6 @@ this, you can evaluate this code block before exporting:
 #+end_src
 This code can be anywhere in your file, even a ~:noexport:~ section.
 
-** Showing deleted text
-
-By default, org-change hides replaced text and shows deleted text with
-a cross. You can choose to show this text by setting
-~org-change-show-deleted-text~ to a non-nil value. The text will be
-shown in the customizable face ~org-change-deleted-face~.
-
 * Customizing and extending
 ** Customization
 
@@ -212,7 +217,11 @@ replacements.
 
 * Bugs and limitations
 
-Please submit bugs as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
+Please submit bugs and feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
+
+- org-change understands only one deleted marker at a time, that is,
+  the current setting. Files annotated with a different setting will
+  not be processed properly. 
 
 - The content of the change link can contain org-mode notation like
   *bold* and /emphasis/, as well as Latex code. However, some other
@@ -225,19 +234,17 @@ Please submit bugs as [[https://github.com/drghirlanda/org-change/issues][issues
   #+begin_src org
     [[change:][Let's cite something \cite{something1972}]]
   #+end_src
+
 - Link hiding is sometimes inaccurate in org-mode. You may see stray
   brackets especially with link that span multiple lines. Sometimes ~M-q~
   takes care of this, or you can enable ~visual-line-mode~ and keep
   paragraphs as single unbroken lines.
+
 - LaTeX export is not fully compatible with HTML export if you use the
   extended comment syntax. That is, HTML export does not handle extra
   arguments like "author=SG," which are a feature of the ~changes~
   package for LaTeX.
   
-* Bugs and  features
-
-Please submit bugs and feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
-
 * Notes
 
 To get started on org-change, I described some features to ChatGPT

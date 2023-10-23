@@ -268,6 +268,11 @@ TEXT is the whole document and BACKEND is checked for being
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-fontify-key (kbd "C-` f")
+  "Keybinding for `org-change-fontify'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defface org-change-link-face
   '((t (:background "lavender blush" :underline nil)))
   "Face for Org Change links."
@@ -283,17 +288,13 @@ TEXT is the whole document and BACKEND is checked for being
   :type 'face
   :group 'org-change)
 
-(defcustom org-change-deleted-text-face 'org-change-deleted-face
-  "Face for Org Change deleted text."
-  :type 'face
-  :group 'org-change)
-
 (defvar org-change
   "Mode variable and function prefix for org-change")
 
-(defun org-change--fontify ()
+(defun org-change-fontify ()
   "Fontify change links.
 Called automatically when Org Change starts."
+  (interactive "")
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward org-change--link-regexp nil t)
@@ -305,7 +306,8 @@ Called automatically when Org Change starts."
 	(font-lock-fontify-region beg end)
 	(unless (equal beg-del nil)
 	  (org-change--propertize-deleted beg-del end-del))
-	(goto-char end)))))
+	(goto-char end))))
+  (message "Fontifying change links (100%%)"))
       
 (define-minor-mode org-change-mode
   "Minor mode for annotating changes in `org-mode' files."
@@ -317,6 +319,7 @@ Called automatically when Org Change starts."
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
             (define-key map org-change-reject-key #'org-change-reject)
+            (define-key map org-change-fontify-key #'org-change-fontify)
             map)
   (when org-change
     (org-link-set-parameters
@@ -325,7 +328,7 @@ Called automatically when Org Change starts."
      :export #'org-change-export-link
      :store #'org-change-store-link
      :face 'org-change-link-face)
-    (org-change--fontify)))
+    (org-change-fontify)))
 
 (defun org-change-open-link (_path _)
   "Open a change link.  Currently does nothing."
