@@ -32,10 +32,13 @@ brackets. To indicate an addition, org-change just omits ~old text~:
 #+begin_src org
   [[change:][new text]]
 #+end_src
-To indicate a deletion, org-change uses ~((DELETED))~ as ~new text~:
+To indicate a deletion, org-change uses a cross as ~new text~:
 #+begin_src org
-  [[change:old text][((DELETED))]]
+  [[change:old text][\(\times\)]
 #+end_src
+The cross is a unicode character. If you cannot or don't want to use
+unicode, you can customize the marker as explained below.
+
 You can embed comments in change links by surrounding them with double
 stars at the end of ~new text~:
 #+begin_src org
@@ -175,11 +178,18 @@ this, you can evaluate this code block before exporting:
 #+end_src
 This code can be anywhere in your file, even a ~:noexport:~ section.
 
+** Showing deleted text
+
+By default, org-change hides replaced text and shows deleted text with
+a cross. You can choose to show this text by setting
+~org-change-show-deleted-text~ to a non-nil value. The text will be
+shown in the customizable face ~org-change-deleted-face~.
+
 * Customizing and extending
 ** Customization
 
-The key sequences and the face used to display change links can be
-changed through the customize interface:
+The key sequences, the deleted marker, and the faces used to display
+change links can be changed through the customize interface:
 #+begin_src org
   M-x customize-group RET org-change
 #+end_src
@@ -197,7 +207,8 @@ is a function that produces the desired string from three string
 arguments: ~old-text~, ~new-text~, and ~comment~. The function can
 figure out whether the change is an addition, deletion, or replacement
 by looking at these variables: for additions, ~old-text~ is empty; for
-deletions, ~new-text~ is ~((DELETED))~; other cases are replacements.
+deletions, ~new-text~ is ~org-change-deleted-marker~; other cases are
+replacements.
 
 * Bugs and limitations
 
@@ -223,12 +234,9 @@ Please submit bugs as [[https://github.com/drghirlanda/org-change/issues][issues
   arguments like "author=SG," which are a feature of the ~changes~
   package for LaTeX.
   
-* Planned features
+* Bugs and  features
 
-Please submit feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
-
-- Simple HTML CSS for change markup.  
-- More export filters?
+Please submit bugs and feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
 
 * Notes
 

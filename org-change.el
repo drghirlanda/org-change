@@ -56,15 +56,15 @@
 
 (defun org-change--propertize-deleted (beg end)
   "Mark text between BEG and END as deleted text."
-  (put-text-property beg (point) 'font-lock-face '(:foreground "gray"))
-  (put-text-property beg (point) 'read-only t))
+  (put-text-property beg end 'font-lock-face 'org-change-deleted-face)
+  (put-text-property beg end 'read-only t))
 
 (defun org-change--mark-change (old-text new-text)
   "Delete region and insert change link with OLD-TEXT and NEW-TEXT."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
   (insert (format "[[change:%s][%s]]" old-text new-text))
-  (when (and (not (equal old-text nil)) org-change-show-old)
+  (when (and (not (equal old-text nil)) org-change-show-deleted)
     (let ((beg (point)))
       (insert old-text)
       (org-change--propertize-deleted beg (point)))))
@@ -238,8 +238,8 @@ TEXT is the whole document and BACKEND is checked for being
   "Customization options for Org Change."
   :group 'org)
 
-(defcustom org-change-show-old t
-  "If non-nil, show deleted/replaced text alongside new text."
+(defcustom org-change-show-deleted t
+  "If non-nil, show deleted/replaced text alongside new text. The deleted/replaced text is shown in the face `org-change-deleted-face', which defaults to gray and can also be cusotmized. The deleted/replaced text is made read-only to avoid confusion."
   :type 'boolean
   :group 'org-change)
 
@@ -273,8 +273,18 @@ TEXT is the whole document and BACKEND is checked for being
   "Face for Org Change links."
   :group 'org-change)
 
+(defface org-change-deleted-face
+  '((t (:foreground "gray")))
+  "Face for Org Change deleted/replaced text."
+  :group 'org-change)
+
 (defcustom org-change-face 'org-change-link-face
   "Face for Org Change links."
+  :type 'face
+  :group 'org-change)
+
+(defcustom org-change-deleted-text-face 'org-change-deleted-face
+  "Face for Org Change deleted text."
   :type 'face
   :group 'org-change)
 
@@ -289,13 +299,13 @@ Called automatically when Org Change starts."
     (while (re-search-forward org-change--link-regexp nil t)
       (let ((beg (match-beginning 0))
 	    (end (match-end 0))
-	    (beg-show (match-beginning 3))
-	    (end-show (match-end 3)))
+	    (beg-del (match-beginning 3))
+	    (end-del (match-end 3)))
 	(message "Fontifying change links (%d%%)" (* 100 (/ (float end) (point-max))))
 	(font-lock-fontify-region beg end)
-	(org-change--propertize-deleted beg-show end-show)
-	(goto-char end))))
-  (message ""))
+	(unless (equal beg-del nil)
+	  (org-change--propertize-deleted beg-del end-del))
+	(goto-char end)))))
       
 (define-minor-mode org-change-mode
   "Minor mode for annotating changes in `org-mode' files."
