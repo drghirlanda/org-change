@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.3.1
+;; Version: 0.3.2
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -52,16 +52,16 @@
 (defun org-change-update-deleted-marker ()
   "Update the marker for deleted/replaced text to the current setting.
 
-This function is used to update change links to use the current
-setting of the marker used for deleted/replaced text. The user is
-prompted for the deleted marker string to be replaced."
+Use this function to update change links to the current setting
+of the marker used for deleted/replaced text. The function
+prompts for the deleted marker string to be replaced."
   (interactive)
   (let ((old-marker (read-string "Old marker: ")))
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward org-change--link-regexp nil t)
-	(if (equal (match-string 2) old-marker)
-	    (replace-match org-change-deleted-marker t t nil 2))))))
+	(if (equal (match-string 1) old-marker)
+	    (replace-match org-change-deleted-marker t t nil 1))))))
   
 (defun org-change--get-region ()
   "Return content of active region or nil."
