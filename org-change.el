@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.3.2
+;; Version: 0.4
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -162,7 +162,7 @@ the active region."
   (interactive "")
   (org-change--accept-or-reject nil))
 
-(defun org-toggle-deleted-text ()
+(defun org-change-toggle-deleted-text ()
   "Show/hide deleted text."
   (interactive)
   (setq org-change-show-deleted (not org-change-show-deleted))
