@@ -70,6 +70,8 @@ Key sequences are also provided to accept or reject the change under
 the cursor:
 - ~C-` k~ :: to accept.
 - ~C-` x~ :: to reject.
+- ~C-` b~ :: to go through all changes, starting at the current point,
+  and accept, reject, or skip them.
 "Accept" means to delete the change link (including any comments) and
 insert the new text (or nothing, if the change is a
 deletion). "Reject" means to delete the change link and insert the old

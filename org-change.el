@@ -164,6 +164,22 @@ the active region."
   (interactive "")
   (org-change--accept-or-reject nil))
 
+(defun org-change-accept-reject-all ()
+  ""
+  (interactive)
+  (while (re-search-forward org-change--link-regexp nil t)
+    (let ((answer (read-char "Accept change? [y/n] or SPC to skip")))
+      (cond
+       ((char-equal answer ?y)
+	(org-change--accept-or-reject t))
+       ((char-equal answer ?n)
+	(org-change--accept-or-reject nil))
+       ((char-equal answer ?\s)) ; skip
+       (t
+	(goto-char (match-beginning 0))))))
+  (message "No more changes"))
+
+
 (defun org-change-toggle-deleted-text ()
   "Show/hide deleted text."
   (interactive)
@@ -306,6 +322,11 @@ The deleted/replaced text is shown in the face
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-accept-reject-all-key (kbd "C-` b")
+  "Keybinding for `org-change-accept-reject-all'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-fontify-key (kbd "C-` f")
   "Keybinding for `org-change-fontify'."
   :type 'key-sequence
@@ -357,6 +378,7 @@ Called automatically when Org Change starts."
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
             (define-key map org-change-reject-key #'org-change-reject)
+            (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
             map)
   (when org-change
