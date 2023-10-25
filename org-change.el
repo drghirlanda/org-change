@@ -59,7 +59,8 @@
 
 Use this function to update change links to the current setting
 of the marker used for deleted/replaced text. The function
-prompts for the deleted marker string to be replaced."
+prompts for the deleted marker string to be replaced, then
+replaces the old marker with the new one in the current buffer."
   (interactive)
   (let ((old-marker (read-string "Old marker: ")))
     (save-excursion
@@ -77,6 +78,7 @@ prompts for the deleted marker string to be replaced."
 
 (defun org-change--propertize-deleted (beg end)
   "Mark text between BEG and END as deleted text."
+  (put-text-property beg end 'org-change-deleted-text t)
   (put-text-property beg end 'font-lock-face 'org-change-deleted-face)
   (put-text-property beg end 'read-only t))
 
@@ -88,7 +90,9 @@ prompts for the deleted marker string to be replaced."
   (when (and (not (equal old-text nil)) org-change-show-deleted)
     (let ((beg (point)))
       (insert old-text)
-      (org-change--propertize-deleted beg (point)))))
+      (org-change--propertize-deleted beg (point))
+      (search-backward "]]")
+      (backward-char 1))))
 
 (defun org-change-replace ()
   "Mark active region as old text and prompt new text."
@@ -99,7 +103,6 @@ prompts for the deleted marker string to be replaced."
       (org-change--mark-change
        old-text
        " ")
-      (backward-char 3)
       (setq org-change--extra-space-flag t))))
 ;;       (read-string "New text: ")))))
 
@@ -118,7 +121,6 @@ If there is no active region, ask for new text."
   (let ((new-text (or (org-change--get-region) " ")))
     (org-change--mark-change "" new-text)
     (when (equal new-text " ")
-      (backward-char 3)
       (setq org-change--extra-space-flag t))))
 
 (defun org-change--accept-or-reject (accept)
@@ -340,8 +342,8 @@ Called automatically when Org Change starts."
 	    (end-del (match-end 3)))
 	(message "Fontifying change links (%d%%)" (* 100 (/ (float end) (point-max))))
 	(font-lock-fontify-region beg end)
-	(unless (equal beg-del nil)
-	  (org-change--propertize-deleted beg-del end-del))
+	(if beg-del
+	    (org-change--propertize-deleted beg-del end-del))
 	(goto-char end))))
   (message "Fontifying change links (100%%)"))
       
