@@ -41,6 +41,11 @@
 (require 'ox)
 (require 'font-lock)
 
+(defun org-change--erase-extra-space ()
+  (when (and org-change-mode org-change--extra-space-flag)
+    (delete-char 1)
+    (setq org-change--extra-space-flag nil)))
+
 (defvar org-change--link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]\\(\\1?\\)"
   "Regexp to match change links.")
 
@@ -60,8 +65,8 @@ prompts for the deleted marker string to be replaced."
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward org-change--link-regexp nil t)
-	(if (equal (match-string 1) old-marker)
-	    (replace-match org-change-deleted-marker t t nil 1))))))
+	(if (equal (match-string 2) old-marker)
+	    (replace-match org-change-deleted-marker t t nil 2))))))
   
 (defun org-change--get-region ()
   "Return content of active region or nil."
@@ -93,7 +98,10 @@ prompts for the deleted marker string to be replaced."
 	(user-error "Select text to be replaced")
       (org-change--mark-change
        old-text
-       (read-string "New text: ")))))
+       " ")
+      (backward-char 3)
+      (setq org-change--extra-space-flag t))))
+;;       (read-string "New text: ")))))
 
 (defun org-change-delete ()
   "Mark active region as old text."
@@ -107,10 +115,11 @@ prompts for the deleted marker string to be replaced."
   "Mark the active region as new text.
 If there is no active region, ask for new text."
   (interactive "")
-  (org-change--mark-change
-   ""
-   (or (org-change--get-region)
-       (read-string "New text: "))))
+  (let ((new-text (or (org-change--get-region) " ")))
+    (org-change--mark-change "" new-text)
+    (when (equal new-text " ")
+      (backward-char 3)
+      (setq org-change--extra-space-flag t))))
 
 (defun org-change--accept-or-reject (accept)
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
@@ -152,6 +161,12 @@ the active region."
   "Reject change at point."
   (interactive "")
   (org-change--accept-or-reject nil))
+
+(defun org-toggle-deleted-text ()
+  "Show/hide deleted text."
+  (interactive)
+  (setq org-change-show-deleted (not org-change-show-deleted))
+  (org-change-fontify))
 
 ;;; Export mechanism
 
@@ -343,6 +358,8 @@ Called automatically when Org Change starts."
             (define-key map org-change-fontify-key #'org-change-fontify)
             map)
   (when org-change
+    (add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
+    (setq-local org-change--extra-space-flag nil)
     (org-link-set-parameters
      "change"
      :follow #'org-change-open-link

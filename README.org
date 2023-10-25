@@ -60,9 +60,11 @@ The key sequences are:
 - ~C-` d~ :: for deletions.
 - ~C-` r~ :: for replacements.
 All these act on the active region. For example, in the case of
-replacement, the region is marked for deletion, and you are prompted
-for new text. You can also use ~C-` a~ without marking a region, in
-which case you are prompted for new text.
+replacement, the region is "deleted" (that is, tucked away in the
+hidden part of the ~change~ link) and you can enter text in its
+place. You can also use ~C-` a~ without marking a region, in which
+case you can start entering new text, which automatically becomes the
+visible part of the ~change~ link).
 
 Key sequences are also provided to accept or reject the change under
 the cursor:
