@@ -87,6 +87,7 @@ replaces the old marker with the new one in the current buffer."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
   (insert (format "[[change:%s][%s]]" old-text new-text))
+  (backward-char 3)
   (when (and (not (equal old-text nil)) org-change-show-deleted)
     (let ((beg (point)))
       (insert old-text)
@@ -98,13 +99,12 @@ replaces the old marker with the new one in the current buffer."
   "Mark active region as old text and prompt new text."
   (interactive "")
   (let ((old-text (org-change--get-region)))
-    (if (equal old-text nil)
+    (if (not old-text)
 	(user-error "Select text to be replaced")
       (org-change--mark-change
        old-text
        " ")
       (setq org-change--extra-space-flag t))))
-;;       (read-string "New text: ")))))
 
 (defun org-change-delete ()
   "Mark active region as old text."
