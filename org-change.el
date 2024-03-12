@@ -83,11 +83,13 @@ replaces the old marker with the new one in the current buffer."
   "Delete region and insert change link with OLD-TEXT and NEW-TEXT."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
-  (insert (format "[[change:%s][%s]]" old-text new-text))
+  (insert (format "[[change:%s][%s]]"
+		  (org-link-escape old-text)
+		  (org-link-escape new-text)))
   (backward-char 3)
   (when (and (not (equal old-text nil)) org-change-show-deleted)
     (let ((beg (point)))
-      (insert old-text)
+      (insert (org-link-escape old-text))
       (org-change--propertize-deleted beg (point))
       (search-backward "]]")
       (backward-char 1))))
@@ -137,8 +139,8 @@ the active region."
 	  (delete-region beg end)
 	  (if accept
 	      (unless(equal new-text org-change-deleted-marker)
-		(insert new-text))
-	    (insert old-text)))
+		(insert (org-link-escape new-text)))
+	    (insert (org-link-escape old-text))))
       (when (use-region-p)
 	(save-excursion
 	  (save-restriction
@@ -165,7 +167,7 @@ the active region."
   "Go through all changes, prompting to accept or reject each one."
   (interactive)
   (while (re-search-forward org-change--link-regexp nil t)
-    (let ((answer (read-char "Accept change? [y/n] or SPC to skip")))
+    (let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
       (cond
        ((char-equal answer ?y)
 	(org-change--accept-or-reject t))
