@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.4
+;; Version: 0.4.1
 ;; Package-Requires: ((emacs "26.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -24,12 +24,12 @@
 
 ;; org-change is a minor mode to annotate changes in org-mode files by
 ;; defining a "change" link type that hides old text and shows new
-;; text. Mark additions to the text with org-change-add (C-` a),
+;; text.  Mark additions to the text with org-change-add (C-` a),
 ;; deletions with org-change-delete (C-` d), and replacements with
-;; org-change-replace (C-` r). Accept or reject changes with
-;; org-change-accept (C-` k) and org-change-reject (C-` x). LaTeX and
-;; HTML export are available. To change key bindings and other
-;; settings, run M-x customize-group RET org-change. More information
+;; org-change-replace (C-` r).  Accept or reject changes with
+;; org-change-accept (C-` k) and org-change-reject (C-` x).  LaTeX and
+;; HTML export are available.  To change key bindings and other
+;; settings, run M-x customize-group RET org-change.  More information
 ;; at the package URL.
 
 ;;; Code:
@@ -55,7 +55,7 @@
   "Update the marker for deleted/replaced text to the current setting.
 
 Use this function to update change links to the current setting
-of the marker used for deleted/replaced text. The function
+of the marker used for deleted/replaced text.  The function
 prompts for the deleted marker string to be replaced, then
 replaces the old marker with the new one in the current buffer."
   (interactive)
@@ -162,7 +162,7 @@ the active region."
   (org-change--accept-or-reject nil))
 
 (defun org-change-accept-reject-all ()
-  ""
+  "Go through all changes, prompting to accept or reject each one."
   (interactive)
   (while (re-search-forward org-change--link-regexp nil t)
     (let ((answer (read-char "Accept change? [y/n] or SPC to skip")))
@@ -289,7 +289,7 @@ TEXT is the whole document and BACKEND is checked for being
 
 The deleted/replaced text is shown in the face
  `org-change-deleted-face', which defaults to gray and can also
- be cusotmized. The deleted/replaced text is made read-only to
+ be cusotmized.  The deleted/replaced text is made read-only to
  avoid confusion."
   :type 'boolean
   :group 'org-change)
