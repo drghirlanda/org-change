@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
 ;; Version: 0.4.1
-;; Package-Requires: ((emacs "26.1") (org "9.3"))
+;; Package-Requires: ((emacs "29.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
 
@@ -39,6 +39,7 @@
 (require 'font-lock)
 
 (defun org-change--erase-extra-space ()
+  "Remove space added by org-change--replace."
   (when (and org-change-mode org-change--extra-space-flag)
     (delete-char 1)
     (setq org-change--extra-space-flag nil)))
@@ -164,18 +165,29 @@ the active region."
   (org-change--accept-or-reject nil))
 
 (defun org-change-accept-reject-all ()
-  "Go through all changes, prompting to accept or reject each one."
+  "Go through all changes, prompting to accept or reject each one.
+With an active region, only process changes in the region,
+otherwise process the whole buffer."
   (interactive)
-  (while (re-search-forward org-change--link-regexp nil t)
-    (let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
-      (cond
-       ((char-equal answer ?y)
-	(org-change--accept-or-reject t))
-       ((char-equal answer ?n)
-	(org-change--accept-or-reject nil))
-       ((char-equal answer ?\s)) ; skip
-       (t
-	(goto-char (match-beginning 0))))))
+  (let* ((beg 1)
+	 (end (buffer-end 1)))
+    (save-mark-and-excursion
+      (when (use-region-p)
+	(setq beg (use-region-beginning)
+	      end (use-region-end))
+	(set-mark end))
+      (goto-char beg)
+      (while (re-search-forward org-change--link-regexp end t)
+	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
+	  (cond
+	   ((char-equal answer ?y)
+	    (org-change--accept-or-reject t))
+	   ((char-equal answer ?n)
+	    (org-change--accept-or-reject nil))
+	   ((char-equal answer ?\s)) ; skip
+	   (t
+	    (goto-char (match-beginning 0))))))
+      (deactivate-mark)))
   (message "No more changes"))
 
 
