@@ -8,26 +8,25 @@
 
 * Replaced text in [[change:the text][a header]]
 
-Replaced text in [[change:a header][the text]].
+Replaced text in [[change:a header][regular text]].
 
-[[change:][An addition with a comment**This is a comment**
-]]
-[[change:Deleted text][((DELETED))]]
+[[change:][An addition with a comment**This is a comment**]]
 
-[[change:][Let's see if *org mode markup* and \LaTeX commands keep being
-recognized: \(a=1\).]]
+[[change:Deleted text][✗]]
 
-[[change:][New text]]
-
+[[change:][Let's see if *org mode markup* and \LaTeX commands keep being recognized: \(a=1\).]]
+ 
+New text
+ 
 [[change:Replace this][Replacement]]
 
-[[change:Delete this][((DELETED))]]
+[[change:Delete this][✗]]
 
 [[change:][pippo]]
 
 [[change:old][pippo]]
 
-[[change:pippo][((DELETED))]]
+[[change:pippo][✗]]
 
 This is to test accept [[change:only][and reject]] in a region with [[change:one change][multiple changes]]. 
 

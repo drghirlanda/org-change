@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.4.1
+;; Version: 0.4.2
 ;; Package-Requires: ((emacs "29.1") (org "9.3"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -114,6 +114,22 @@ replaces the old marker with the new one in the current buffer."
 	(user-error "Select text to be deleted")
       (org-change--mark-change old-text org-change-deleted-marker))))
 
+(defun org-change-kill ()
+  "Like `org-change-delete', but kill (cut) rather than delete text.
+Used together with `org-change-yank' to move text around."
+  (interactive)
+  (when (use-region-p)
+    (kill-ring-save (region-beginning) (region-end)))
+  (org-change-delete))
+
+(defun org-change-yank ()
+  "Yank (paste) text and mark it as an addition.
+Used together with `org-change-kill' to move text around."
+  (interactive)
+  (insert "[[change:][")
+  (yank)
+  (insert "]]"))
+  
 (defun org-change-add ()
   "Mark the active region as new text.
 If there is no active region, ask for new text."
@@ -318,6 +334,16 @@ The deleted/replaced text is shown in the face
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-kill-key (kbd "C-` w")
+  "Keybinding for `org-change-kill'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-yank-key (kbd "C-` y")
+  "Keybinding for `org-change-yank'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-replace-key (kbd "C-` r")
   "Keybinding for `org-change-replace'."
   :type 'key-sequence
@@ -386,6 +412,8 @@ Called automatically when Org Change starts."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map org-change-add-key #'org-change-add)
             (define-key map org-change-delete-key #'org-change-delete)
+            (define-key map org-change-kill-key #'org-change-kill)
+            (define-key map org-change-yank-key #'org-change-yank)
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
             (define-key map org-change-reject-key #'org-change-reject)

@@ -47,6 +47,12 @@ The key sequences are:
 - ~C-` r~ :: for replacements.
 All these act on the active region, marking it as added, deleted, or replaced text. In the case of replacement, the region is "deleted" (that is, tucked away in the hidden part of the ~change~ link) and you can enter text in its place. You can also use ~C-` a~ without marking a region, in which case you can start entering new text, which automatically becomes the visible part of the ~change~ link.
 
+** Moving text
+
+To move sections of text from one place to another, you can use the key sequences ~C-` w~ for killing (Emacspeak for "cutting") and ~C-` y~ for yanking (Emacspeak for "pasting"). These work like ~C-w~ and ~C-y~ but mark the killed text as a deletion and the yanked text as an addition.   
+
+** Accepting and rejecting changes
+
 Key sequences are also provided to accept or reject changes:
 - ~C-` k~ :: to accept the change under the cursor.
 - ~C-` x~ :: to reject the change under the cursor.
@@ -54,6 +60,8 @@ Key sequences are also provided to accept or reject changes:
 "Accept" means to delete the change link (including any comments) and insert the new text (or nothing, if the change is a deletion). "Reject" means to delete the change link and insert the old text (or nothing, if the change is an addition).
 
 If there is no change under the cursor, accept and reject work on all change links in the active region. If there is no active region, nothing happens. You can accept or reject all changes in a document by selecting the whole buffer, but note that this deletes all changes. If you just want to export a clean manuscript, see section [[Producing a clean document]].
+
+** Other functionality
 
 The following functionality is provided by org-mode, and is useful for ~change~ links:
 - ~C-c C-l~ :: lets you edit the link in the minibuffer. Because this is an org-mode function for all links, it will display the "old text" as =Link: change:old text= and the "new text" as =Description: new text=.
@@ -140,7 +148,7 @@ The key sequences, the deleted/replaced text marker, and the faces used to displ
   M-x customize-group RET org-change
 #+end_src
 
-If you change you mind about the marker for deleted/replaced text, you should first customize ~org-change-deleted-marker~, and then run
+If you change your mind about the marker for deleted/replaced text, you should first customize ~org-change-deleted-marker~, and then run
 #+begin_src org
   M-x org-change-update-deleted-marker
 #+end_src
