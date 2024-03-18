@@ -6,6 +6,8 @@
   (setq org-change-final nil)
 #+end_src
 
+Let's check special LaTeX characters: [[change:][11% is an addition]].
+
 * Replaced text in [[change:the text][a header]]
 
 Replaced text in [[change:a header][regular text]].
@@ -15,7 +17,7 @@ Replaced text in [[change:a header][regular text]].
 [[change:Deleted text][✗]]
 
 [[change:][Let's see if *org mode markup* and \LaTeX commands keep being recognized: \(a=1\).]]
- 
+
 New text
  
 [[change:Replace this][Replacement]]

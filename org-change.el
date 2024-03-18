@@ -220,6 +220,9 @@ otherwise process the whole buffer."
 OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change
 link."
   (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
+    (setq old-text (org-latex--protect-text old-text)
+	  new-text (org-latex--protect-text new-text)
+	  comment  (org-latex--protect-text comment))
     (cond ((equal old-text "")
 	   (format "\\added%s{%s}" comment new-text))
 	  ((equal new-text org-change-deleted-marker)
@@ -387,13 +390,17 @@ The deleted/replaced text is shown in the face
 (defvar org-change
   "Mode variable and function prefix for org-change")
 
-(defun org-change-fontify ()
+(defun org-change-fontify (&rest rbeg rend)
   "Fontify change links.
-Called automatically when Org Change starts."
-  (interactive "")
+Called automatically when Org Change starts. Optional arguments
+RBEG and REND delimit the region to fontify. If nil, RBEG is set
+to buffer beginning and REND to buffer end."
+  (interactive)
+  (setq rbeg (or rbeg (point-min))
+	rend (or rend (point-max)))
   (save-excursion
-    (goto-char (point-min))
-    (while (re-search-forward org-change--link-regexp nil t)
+    (goto-char rbeg)
+    (while (re-search-forward org-change--link-regexp rend t)
       (let ((beg (match-beginning 0))
 	    (end (match-end 0))
 	    (beg-del (match-beginning 3))
