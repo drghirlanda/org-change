@@ -6,32 +6,31 @@
   (setq org-change-final nil)
 #+end_src
 
-Let's check special LaTeX characters: [[change:][11% is an addition]].
+Let's check special LaTeX characters: {!11% is an addition!}{!!}.
 
-* Replaced text in [[change:the text][a header]]
+* Replaced text in {!a header!}{!the text!}
 
-Replaced text in [[change:a header][regular text]].
+Replaced text in {!regular text!}{!a header!}.
 
-[[change:][An addition with a comment**This is a comment**]]
+{!An addition with a comment!}{!!}{!This is a comment!}
 
-[[change:Deleted text][✗]]
+{!!}{!Deleted text!}
 
-[[change:][Let's see if *org mode markup* and \LaTeX commands keep being recognized: \(a=1\).]]
+{!Let's see if *org mode markup* and \LaTeX commands keep being recognized: \(a=1\).!}{!!}
 
 New text
- 
-[[change:Replace this][Replacement]]
 
-[[change:Delete this][✗]]
+{!Replacement!}{!Replace this!}
 
-[[change:][pippo]]
+{!!}{!Delete this!}
 
-[[change:old][pippo]]
+{!pippo!}{!!}
 
-[[change:pippo][✗]]
+{!pippo!}{!old!}
 
-This is to test accept [[change:only][and reject]] in a region with [[change:one change][multiple changes]]. 
+{!!}{!pippo!}
 
+This is to test accept {!and reject!}{!only!} in a region with {!multiple changes!}{!one change!}.
 
 
 

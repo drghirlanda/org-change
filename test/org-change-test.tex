@@ -1,4 +1,4 @@
-% Created 2023-04-24 Mon 12:19
+% Created 2026-02-26 Thu 17:53
 % Intended LaTeX compiler: pdflatex
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
@@ -15,25 +15,32 @@
 \author{Stefano Ghirlanda}
 \date{\today}
 \title{Tests for org-change}
+\hypersetup{
+ pdfauthor={Stefano Ghirlanda},
+ pdftitle={Tests for org-change},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.11)}, 
+ pdflang={English}}
 \usepackage{changes}
 \begin{document}
 
 \maketitle
 \tableofcontents
 
-
+Let's check special \LaTeX{} characters: \added{11% is an addition}.
 \section{Replaced text in \replaced{a header}{the text}}
-\label{sec:orgf56541b}
+\label{sec:org2ba6fe5}
 
-Replaced text in \replaced{the text}{a header}.
+Replaced text in \replaced{regular text}{a header}.
 
 \added[comment=This is a comment]{An addition with a comment}
+
 \deleted{Deleted text}
 
-\added{Let's see if \textbf{org mode commands} and \LaTeX commands keep being
-recognized: \(a=1\).}
+\added{Let's see if *org mode markup* and \LaTeX commands keep being recognized: \(a=1\).}
 
-\added{New text}
+New text
 
 \replaced{Replacement}{Replace this}
 
@@ -45,5 +52,5 @@ recognized: \(a=1\).}
 
 \deleted{pippo}
 
-This is to test accept \added{and reject} in a region with \replaced{multiple changes}{one change}. 
+This is to test accept \replaced{and reject}{only} in a region with \replaced{multiple changes}{one change}.
 \end{document}

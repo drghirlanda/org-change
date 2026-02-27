@@ -1,9 +1,9 @@
-;;; org-change.el --- Annotate changes in org-mode files -*- lexical-binding: t; -*-
+;;; org-change.el --- Annotate changes in text files -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023 Stefano Ghirlanda
 
-;; Version: 0.4.2
-;; Package-Requires: ((emacs "29.1") (org "9.3"))
+;; Version: 0.5.0
+;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
 
@@ -22,309 +22,36 @@
 
 ;;; Commentary:
 
-;; org-change is a minor mode to annotate changes in org-mode files by
-;; defining a "change" link type that hides old text and shows new
-;; text.  Mark additions to the text with org-change-add (C-` a),
-;; deletions with org-change-delete (C-` d), and replacements with
+;; org-change is a minor mode to annotate changes in text files using
+;; a custom markup syntax: {!new text!}{!old text!}.  It works in any
+;; major mode.  Mark additions with org-change-add (C-` a), deletions
+;; with org-change-delete (C-` d), and replacements with
 ;; org-change-replace (C-` r).  Accept or reject changes with
-;; org-change-accept (C-` k) and org-change-reject (C-` x).  LaTeX and
-;; HTML export are available.  To change key bindings and other
-;; settings, run M-x customize-group RET org-change.  More information
-;; at the package URL.
+;; org-change-accept (C-` k) and org-change-reject (C-` x).  When
+;; used in org-mode, LaTeX and HTML export are available.  To change
+;; key bindings and other settings, run M-x customize-group RET
+;; org-change.  More information at the package URL.
 
 ;;; Code:
 
-(require 'org)
-(require 'ox)
-(require 'font-lock)
-
-(defun org-change--erase-extra-space ()
-  "Remove space added by org-change--replace."
-  (when (and org-change-mode org-change--extra-space-flag)
-    (delete-char 1)
-    (setq org-change--extra-space-flag nil)))
-
-(defvar org-change--link-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]\\(\\1?\\)"
-  "Regexp to match change links.")
-
-(defcustom org-change-deleted-marker "✗"
-  "Placeholder for deleted text."
-  :type 'string
-  :group 'org-change)
-
-(defun org-change-update-deleted-marker ()
-  "Update the marker for deleted/replaced text to the current setting.
-
-Use this function to update change links to the current setting
-of the marker used for deleted/replaced text.  The function
-prompts for the deleted marker string to be replaced, then
-replaces the old marker with the new one in the current buffer."
-  (interactive)
-  (let ((old-marker (read-string "Old marker: ")))
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward org-change--link-regexp nil t)
-	(if (equal (match-string 2) old-marker)
-	    (replace-match org-change-deleted-marker t t nil 2))))))
-  
-(defun org-change--get-region ()
-  "Return content of active region or nil."
-  (when (use-region-p)
-    (buffer-substring-no-properties
-     (region-beginning)
-     (region-end))))
-
-(defun org-change--propertize-deleted (beg end)
-  "Mark text between BEG and END as deleted text."
-  (put-text-property beg end 'org-change-deleted-text t)
-  (put-text-property beg end 'font-lock-face 'org-change-deleted-face)
-  (put-text-property beg end 'read-only t))
-
-(defun org-change--mark-change (old-text new-text)
-  "Delete region and insert change link with OLD-TEXT and NEW-TEXT."
-  (when (use-region-p)
-    (delete-region (region-beginning) (region-end)))
-  (insert (format "[[change:%s][%s]]"
-		  (org-link-escape old-text)
-		  (org-link-escape new-text)))
-  (backward-char 3)
-  (when (and (not (equal old-text nil)) org-change-show-deleted)
-    (let ((beg (point)))
-      (insert (org-link-escape old-text))
-      (org-change--propertize-deleted beg (point))
-      (search-backward "]]")
-      (backward-char 1))))
-
-(defun org-change-replace ()
-  "Mark active region as old text and prompt new text."
-  (interactive "")
-  (let ((old-text (org-change--get-region)))
-    (if (not old-text)
-	(user-error "Select text to be replaced")
-      (org-change--mark-change
-       old-text
-       " ")
-      (setq org-change--extra-space-flag t))))
-
-(defun org-change-delete ()
-  "Mark active region as old text."
-  (interactive "")
-  (let ((old-text (org-change--get-region)))
-    (if (equal old-text nil)
-	(user-error "Select text to be deleted")
-      (org-change--mark-change old-text org-change-deleted-marker))))
-
-(defun org-change-kill ()
-  "Like `org-change-delete', but kill (cut) rather than delete text.
-Used together with `org-change-yank' to move text around."
-  (interactive)
-  (when (use-region-p)
-    (kill-ring-save (region-beginning) (region-end)))
-  (org-change-delete))
-
-(defun org-change-yank ()
-  "Yank (paste) text and mark it as an addition.
-Used together with `org-change-kill' to move text around."
-  (interactive)
-  (insert "[[change:][")
-  (yank)
-  (insert "]]"))
-  
-(defun org-change-add ()
-  "Mark the active region as new text.
-If there is no active region, ask for new text."
-  (interactive "")
-  (let ((new-text (or (org-change--get-region) " ")))
-    (org-change--mark-change "" new-text)
-    (when (equal new-text " ")
-      (setq org-change--extra-space-flag t))))
-
-(defun org-change--accept-or-reject (accept)
-  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
-If there is no change at point, accept or reject all changes in
-the active region."
-  (let* ((link-position (org-in-regexp org-change--link-regexp 10))
-	 (inhibit-read-only t))
-    (if link-position
-	(let ((old-text (match-string-no-properties 1))
-	      ;; to get new-text we discard comments:
-	      (new-text (replace-regexp-in-string
-			 "\\*\\*.+\\*\\*$" ""
-			 (match-string-no-properties 2)))
-	      (beg (car link-position))
-	      (end (cdr link-position)))
-	  (delete-region beg end)
-	  (if accept
-	      (unless(equal new-text org-change-deleted-marker)
-		(insert (org-link-escape new-text)))
-	    (insert (org-link-escape old-text))))
-      (when (use-region-p)
-	(save-excursion
-	  (save-restriction
-	    (goto-char (region-beginning))
-	    (while (re-search-forward org-change--link-regexp nil t)
-	      (let ((beg (match-beginning 0)))
-		(goto-char beg)
-		(org-change--accept-or-reject accept)
-		;; go to beg because buffer has changed and match-end
-		;; is not reliable:
-		(goto-char beg)))))))))
-
-(defun org-change-accept ()
-  "Accept change at point."
-  (interactive "")
-  (org-change--accept-or-reject t))
-
-(defun org-change-reject ()
-  "Reject change at point."
-  (interactive "")
-  (org-change--accept-or-reject nil))
-
-(defun org-change-accept-reject-all ()
-  "Go through all changes, prompting to accept or reject each one.
-With an active region, only process changes in the region,
-otherwise process the whole buffer."
-  (interactive)
-  (let* ((beg 1)
-	 (end (buffer-end 1)))
-    (save-mark-and-excursion
-      (when (use-region-p)
-	(setq beg (use-region-beginning)
-	      end (use-region-end))
-	(set-mark end))
-      (goto-char beg)
-      (while (re-search-forward org-change--link-regexp end t)
-	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
-	  (cond
-	   ((char-equal answer ?y)
-	    (org-change--accept-or-reject t))
-	   ((char-equal answer ?n)
-	    (org-change--accept-or-reject nil))
-	   ((char-equal answer ?\s)) ; skip
-	   (t
-	    (goto-char (match-beginning 0))))))
-      (deactivate-mark)))
-  (message "No more changes"))
-
-
-(defun org-change-toggle-deleted-text ()
-  "Show/hide deleted text."
-  (interactive)
-  (setq org-change-show-deleted (not org-change-show-deleted))
-  (org-change-fontify))
-
-;;; Export mechanism
-
-(defun org-change--export-latex (old-text new-text comment)
-  "Export a change link to Latex.
-OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change
-link."
-  (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
-    (setq old-text (org-latex--protect-text old-text)
-	  new-text (org-latex--protect-text new-text)
-	  comment  (org-latex--protect-text comment))
-    (cond ((equal old-text "")
-	   (format "\\added%s{%s}" comment new-text))
-	  ((equal new-text org-change-deleted-marker)
-	   (format "\\deleted%s{%s}" comment old-text))
-	  (t
-	   (format "\\replaced%s{%s}{%s}" comment new-text old-text)))))
-
-(defun org-change--make-span (class text)
-  "Return string <span class=\"CLASS\">TEXT</span> for HTML export."
-    (if (equal text "")
-	""
-      (format "<span class=\"%s\">%s</span>" class text)))
-
-(defun org-change--export-html (old-text new-text comment)
-  "Export a change link to HTML.
-OLD-TEXT, NEW-TEXT, and COMMENT are the elemtns of the change
-link."
-  (cond ((equal old-text "")
-	 (org-change--make-span
-	  "org-change-added"
-	  (concat new-text (org-change--make-span
-			    "org-change-comment"
-			    comment))))
-	((equal new-text org-change-deleted-marker)
-	 (org-change--make-span
-	  "org-change-deleted"
-	  (concat old-text (org-change--make-span
-			    "org-change-comment" comment))))
-	(t
-	 (concat
-	  (org-change--make-span
-	   "org-change-added"
-	   (concat new-text (org-change--make-span
-			     "org-change-comment" comment)))
-	  (org-change--make-span "org-change-deleted" old-text)))))
-
-(defvar org-change--exporters
-  '((latex . org-change--export-latex)
-    (html . org-change--export-html))
-  "List of exporters known to Org Change.")
-
-(defun org-change-add-export-backend (backend exporter)
-  "Add export backend to Org Change.
-The EXPORTER function must take arguments old-text, new-text, and
-comment, and return a string appropriate to BACKEND."
-  (add-to-list 'org-change--exporters (cons backend exporter)))
-
-(defvar org-change-final
-  nil
-  "If nil, include changes when exporting, otherwise include only new text.")
-
-(defun org-change-export-link (old new backend _)
-  "Export a change link to a BACKEND.
-This function operates within the standard `org-mode' link export,
-but OLD and NEW replace link and description."
-  (if (or (not old) (not new))
-      (user-error "Malformed change: link with:\nold text = %s\nnew-text: %s" old new))
-  (let* ((test (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" new))
-	 (new-text (if test (match-string 1 new) new))
-	 (comment (if test (match-string 2 new) "")))
-    (if org-change-final
-	(if (equal new-text org-change-deleted-marker) "" new-text)
-      (let ((exporter (alist-get
-		       backend
-		       org-change--exporters
-		       nil
-		       nil
-		       'org-export-derived-backend-p)))
-	(if exporter
-	    (funcall exporter old new-text comment)
-	  (user-error "Change links not supported in %s export" backend))))))
-  
-(defun org-change-filter-final-output (text backend _)
-  "Add the Latex package changes.sty to the Latex preamble.
-TEXT is the whole document and BACKEND is checked for being
-\\='latex or derived from \\='latex."
-  (when (and (org-export-derived-backend-p backend 'latex)
-	     (not org-change-final))
-    (replace-regexp-in-string
-     "\\\\begin{document}"
-     (concat
-      "\\\\usepackage"
-      (when (boundp 'org-change-latex-options) org-change-latex-options)
-      "{changes}\n\\\\begin{document}")
-     text)))
-
-(add-to-list 'org-export-filter-final-output-functions #'org-change-filter-final-output)
-
-;; Customizations and minor mode definitions
+;; Customization group and options (defined early so functions can use them)
 
 (defgroup org-change nil
   "Customization options for Org Change."
-  :group 'org)
+  :group 'wp)
 
 (defcustom org-change-show-deleted nil
   "If non-nil, show deleted/replaced text alongside new text.
 
 The deleted/replaced text is shown in the face
  `org-change-deleted-face', which defaults to gray and can also
- be cusotmized.  The deleted/replaced text is made read-only to
- avoid confusion."
+ be customized."
   :type 'boolean
+  :group 'org-change)
+
+(defcustom org-change-deleted-marker "✗"
+  "Placeholder for deleted text."
+  :type 'string
   :group 'org-change)
 
 (defcustom org-change-add-key (kbd "C-` a")
@@ -387,33 +114,430 @@ The deleted/replaced text is shown in the face
   :type 'face
   :group 'org-change)
 
-(defvar org-change
-  "Mode variable and function prefix for org-change")
+;; Internal variables
 
-(defun org-change-fontify (&rest rbeg rend)
-  "Fontify change links.
-Called automatically when Org Change starts. Optional arguments
-RBEG and REND delimit the region to fontify. If nil, RBEG is set
-to buffer beginning and REND to buffer end."
+(defvar org-change-mode)  ; defined by define-minor-mode below
+
+(defvar org-change--extra-space-flag nil
+  "Non-nil when a space has been inserted as a typing placeholder.")
+
+;; Regexp to match change markup: {!new!}{!old!} with optional {!comment!}
+;; Group 1 = new text, Group 2 = old text, Group 3 = comment (optional)
+(defvar org-change--regexp
+  "{!\\(\\(?:.\\|\n\\)*?\\)!}{!\\(\\(?:.\\|\n\\)*?\\)!}\\(?:{!\\(\\(?:.\\|\n\\)*?\\)!}\\)?"
+  "Regexp to match change markup.")
+
+(defun org-change--get-region ()
+  "Return content of active region or nil."
+  (when (use-region-p)
+    (buffer-substring-no-properties
+     (region-beginning)
+     (region-end))))
+
+;;; Overlay-based display
+
+(defun org-change--remove-overlays (&optional rbeg rend)
+  "Remove all org-change overlays in region RBEG to REND."
+  (remove-overlays (or rbeg (point-min)) (or rend (point-max))
+		   'org-change-overlay t))
+
+(defun org-change--make-overlay (beg end &rest properties)
+  "Create an org-change overlay from BEG to END with PROPERTIES."
+  (let ((ov (make-overlay beg end nil t nil)))
+    (overlay-put ov 'org-change-overlay t)
+    (overlay-put ov 'evaporate t)
+    (while properties
+      (overlay-put ov (pop properties) (pop properties)))
+    ov))
+
+(defun org-change-fontify (&optional rbeg rend)
+  "Fontify change markup using overlays.
+Called automatically when Org Change mode starts.  Optional
+arguments RBEG and REND delimit the region to fontify.  If nil,
+RBEG is set to buffer beginning and REND to buffer end."
   (interactive)
   (setq rbeg (or rbeg (point-min))
 	rend (or rend (point-max)))
+  (org-change--remove-overlays rbeg rend)
   (save-excursion
     (goto-char rbeg)
-    (while (re-search-forward org-change--link-regexp rend t)
-      (let ((beg (match-beginning 0))
-	    (end (match-end 0))
-	    (beg-del (match-beginning 3))
-	    (end-del (match-end 3)))
-	(message "Fontifying change links (%d%%)" (* 100 (/ (float end) (point-max))))
-	(font-lock-fontify-region beg end)
-	(if beg-del
-	    (org-change--propertize-deleted beg-del end-del))
-	(goto-char end))))
-  (message "Fontifying change links (100%%)"))
-      
+    (while (re-search-forward org-change--regexp rend t)
+      (let* ((full-beg (match-beginning 0))
+	     (full-end (match-end 0))
+	     (new-text (match-string 1))
+	     (old-text (match-string 2))
+	     (new-beg (match-beginning 1))
+	     (new-end (match-end 1))
+	     (open-beg full-beg)        ; {!
+	     (open-end (+ full-beg 2))  ; after {!
+	     (mid-beg new-end))         ; start of !}{!old!}...
+	(message "Fontifying changes (%d%%)"
+		 (* 100 (/ (float full-end) (point-max))))
+	(cond
+	 ;; Deletion: new text is empty
+	 ((equal new-text "")
+	  ;; Hide everything, show deleted marker
+	  (org-change--make-overlay full-beg full-end
+				    'display org-change-deleted-marker
+				    'face 'org-change-link-face)
+	  (when org-change-show-deleted
+	    ;; Also show old text after the marker
+	    (let ((ov (make-overlay full-end full-end nil t nil)))
+	      (overlay-put ov 'org-change-overlay t)
+	      (overlay-put ov 'evaporate t)
+	      (overlay-put ov 'after-string
+			   (propertize old-text
+				       'face 'org-change-deleted-face)))))
+	 ;; Addition or replacement: show new text
+	 (t
+	  ;; Hide {! before new text
+	  (org-change--make-overlay open-beg open-end 'invisible t)
+	  ;; Face on new text
+	  (org-change--make-overlay new-beg new-end
+				    'face 'org-change-link-face)
+	  ;; Hide !}{!old!} and optional {!comment!}
+	  (org-change--make-overlay mid-beg full-end 'invisible t)
+	  (when (and org-change-show-deleted (not (equal old-text "")))
+	    ;; Show old text after the change
+	    (let ((ov (make-overlay full-end full-end nil t nil)))
+	      (overlay-put ov 'org-change-overlay t)
+	      (overlay-put ov 'evaporate t)
+	      (overlay-put ov 'after-string
+			   (propertize old-text
+				       'face 'org-change-deleted-face))))))
+	(goto-char full-end))))
+  (message "Fontifying changes (100%%)"))
+
+(defun org-change--after-change (beg end _len)
+  "Re-fontify around changes after buffer modification.
+BEG and END are the modified region boundaries."
+  (when org-change-mode
+    (save-excursion
+      (let ((rbeg (progn (goto-char beg) (line-beginning-position)))
+	    (rend (progn (goto-char end) (line-end-position))))
+	(org-change-fontify rbeg rend)))))
+
+;;; Change creation functions
+
+(defun org-change--mark-change (old-text new-text)
+  "Delete region and insert change markup with OLD-TEXT and NEW-TEXT."
+  (when (use-region-p)
+    (delete-region (region-beginning) (region-end)))
+  (let ((beg (point)))
+    (insert (format "{!%s!}{!%s!}" new-text old-text))
+    (org-change-fontify beg (point))))
+
+(defun org-change-replace ()
+  "Mark active region as replaced text.
+The region becomes old text and point is placed where you can
+type the new text."
+  (interactive "")
+  (let ((old-text (org-change--get-region)))
+    (if (not old-text)
+	(user-error "Select text to be replaced")
+      (when (use-region-p)
+	(delete-region (region-beginning) (region-end)))
+      (let ((beg (point)))
+	(insert (format "{! !}{!%s!}" old-text))
+	(org-change-fontify beg (point))
+	;; place point inside the new text, on the space
+	(goto-char (+ beg 2))
+	(setq org-change--extra-space-flag t)))))
+
+(defun org-change-delete ()
+  "Mark active region as deleted text."
+  (interactive "")
+  (let ((old-text (org-change--get-region)))
+    (if (equal old-text nil)
+	(user-error "Select text to be deleted")
+      (org-change--mark-change old-text ""))))
+
+(defun org-change-kill ()
+  "Like `org-change-delete', but kill (cut) rather than delete text.
+Used together with `org-change-yank' to move text around."
+  (interactive)
+  (when (use-region-p)
+    (kill-ring-save (region-beginning) (region-end)))
+  (org-change-delete))
+
+(defun org-change-yank ()
+  "Yank (paste) text and mark it as an addition.
+Used together with `org-change-kill' to move text around."
+  (interactive)
+  (let ((beg (point)))
+    (insert "{!")
+    (yank)
+    (insert "!}{!!}")
+    (org-change-fontify beg (point))))
+
+(defun org-change-add ()
+  "Mark the active region as new text.
+If there is no active region, insert an empty addition for typing."
+  (interactive "")
+  (let ((new-text (or (org-change--get-region) " ")))
+    (when (use-region-p)
+      (delete-region (region-beginning) (region-end)))
+    (let ((beg (point)))
+      (insert (format "{!%s!}{!!}" new-text))
+      (org-change-fontify beg (point))
+      (when (equal new-text " ")
+	;; place point on the space for typing
+	(goto-char (+ beg 2))
+	(setq org-change--extra-space-flag t)))))
+
+(defun org-change--erase-extra-space ()
+  "Remove space added by replace or add."
+  (when (and org-change-mode org-change--extra-space-flag)
+    (delete-char 1)
+    (setq org-change--extra-space-flag nil)))
+
+;;; Accept/reject functions
+
+(defun org-change--at-change ()
+  "If point is inside a change, return (BEG . END) of the match.
+Also sets match data for `org-change--regexp'."
+  (save-excursion
+    (let ((pos (point))
+	  (limit (max (point-min) (- (point) 1000))))
+      ;; Search backward then forward to find a change containing point
+      (goto-char limit)
+      (catch 'found
+	(while (re-search-forward org-change--regexp nil t)
+	  (when (and (<= (match-beginning 0) pos)
+		     (>= (match-end 0) pos))
+	    (throw 'found (cons (match-beginning 0) (match-end 0))))
+	  (when (> (match-beginning 0) pos)
+	    (throw 'found nil)))
+	nil))))
+
+(defun org-change--accept-or-reject (accept)
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
+If there is no change at point, accept or reject all changes in
+the active region."
+  (let ((change-position (org-change--at-change))
+	(inhibit-read-only t))
+    (if change-position
+	(let ((new-text (match-string-no-properties 1))
+	      (old-text (match-string-no-properties 2))
+	      (beg (car change-position))
+	      (end (cdr change-position)))
+	  (org-change--remove-overlays beg end)
+	  (delete-region beg end)
+	  (if accept
+	      (unless (equal new-text "")
+		(insert new-text))
+	    (insert old-text)))
+      (when (use-region-p)
+	(save-excursion
+	  (save-restriction
+	    (goto-char (region-beginning))
+	    (while (re-search-forward org-change--regexp nil t)
+	      (let ((beg (match-beginning 0)))
+		(goto-char beg)
+		(org-change--accept-or-reject accept)
+		(goto-char beg)))))))))
+
+(defun org-change-accept ()
+  "Accept change at point."
+  (interactive "")
+  (org-change--accept-or-reject t))
+
+(defun org-change-reject ()
+  "Reject change at point."
+  (interactive "")
+  (org-change--accept-or-reject nil))
+
+(defun org-change-accept-reject-all ()
+  "Go through all changes, prompting to accept or reject each one.
+With an active region, only process changes in the region,
+otherwise process the whole buffer."
+  (interactive)
+  (let* ((beg 1)
+	 (end (buffer-end 1)))
+    (save-mark-and-excursion
+      (when (use-region-p)
+	(setq beg (use-region-beginning)
+	      end (use-region-end))
+	(set-mark end))
+      (goto-char beg)
+      (while (re-search-forward org-change--regexp end t)
+	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
+	  (cond
+	   ((char-equal answer ?y)
+	    (org-change--accept-or-reject t))
+	   ((char-equal answer ?n)
+	    (org-change--accept-or-reject nil))
+	   ((char-equal answer ?\s)) ; skip
+	   (t
+	    (goto-char (match-beginning 0))))))
+      (deactivate-mark)))
+  (message "No more changes"))
+
+(defun org-change-toggle-deleted-text ()
+  "Show/hide deleted text."
+  (interactive)
+  (setq org-change-show-deleted (not org-change-show-deleted))
+  (org-change-fontify))
+
+;;; Converting from old link syntax
+
+(defun org-change-convert-from-links ()
+  "Convert old change link syntax to new markup syntax in the buffer.
+The old syntax is [[change:old text][new text]], used in versions
+before 0.5.  This function converts all occurrences in the buffer
+to the new {!new text!}{!old text!} syntax.
+
+This requires `org-mode' to be available for `org-link-unescape'."
+  (interactive)
+  (require 'ol)
+  (let ((old-regexp "\\[\\[change:\\(.*?\\)\\]\\[\\(.*?\\)\\]\\]")
+	(count 0))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward old-regexp nil t)
+	(let* ((old-text (org-link-unescape (match-string 1)))
+	       (raw-new (org-link-unescape (match-string 2)))
+	       (mbeg (match-beginning 0))
+	       (mend (match-end 0))
+	       ;; Extract comment from **comment** at end of new text
+	       (has-comment (string-match "\\(.*\\)\\*\\*\\(.+\\)\\*\\*$" raw-new))
+	       (new-text (if has-comment (match-string 1 raw-new) raw-new))
+	       (comment (if has-comment (match-string 2 raw-new) nil))
+	       ;; Deletion: new text is the deleted marker
+	       (new-text (if (equal new-text org-change-deleted-marker) "" new-text))
+	       (replacement
+		(concat (format "{!%s!}{!%s!}" new-text old-text)
+			(if comment (format "{!%s!}" comment) ""))))
+	  (delete-region mbeg mend)
+	  (goto-char mbeg)
+	  (insert replacement)
+	  (setq count (1+ count)))))
+    (when (> count 0)
+      (org-change-fontify))
+    (message "Converted %d change link%s" count (if (= count 1) "" "s"))))
+
+;;; Export mechanism (requires org-mode)
+
+(declare-function org-link-unescape "ol")
+(declare-function org-export-derived-backend-p "ox")
+(defvar org-export-before-processing-functions)
+(defvar org-export-filter-final-output-functions)
+
+(defun org-change--export-latex (old-text new-text comment)
+  "Export a change to LaTeX.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change.
+The result is wrapped in @@latex:...@@ so org exports it verbatim."
+  (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
+    (format "@@latex:%s@@"
+	    (cond ((equal old-text "")
+		   (format "\\added%s{%s}" comment new-text))
+		  ((equal new-text "")
+		   (format "\\deleted%s{%s}" comment old-text))
+		  (t
+		   (format "\\replaced%s{%s}{%s}" comment new-text old-text))))))
+
+(defun org-change--make-span (class text)
+  "Return string <span class=\"CLASS\">TEXT</span> for HTML export."
+    (if (equal text "")
+	""
+      (format "<span class=\"%s\">%s</span>" class text)))
+
+(defun org-change--export-html (old-text new-text comment)
+  "Export a change to HTML.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change.
+The result is wrapped in @@html:...@@ so org exports it verbatim."
+  (format "@@html:%s@@"
+	  (cond ((equal old-text "")
+		 (org-change--make-span
+		  "org-change-added"
+		  (concat new-text (org-change--make-span
+				    "org-change-comment"
+				    comment))))
+		((equal new-text "")
+		 (org-change--make-span
+		  "org-change-deleted"
+		  (concat old-text (org-change--make-span
+				    "org-change-comment" comment))))
+		(t
+		 (concat
+		  (org-change--make-span
+		   "org-change-added"
+		   (concat new-text (org-change--make-span
+				     "org-change-comment" comment)))
+		  (org-change--make-span "org-change-deleted" old-text))))))
+
+(defvar org-change--exporters
+  '((latex . org-change--export-latex)
+    (html . org-change--export-html))
+  "List of exporters known to Org Change.")
+
+(defun org-change-add-export-backend (backend exporter)
+  "Add export backend to Org Change.
+The EXPORTER function must take arguments old-text, new-text, and
+comment, and return a string appropriate to BACKEND."
+  (add-to-list 'org-change--exporters (cons backend exporter)))
+
+(defvar org-change-final
+  nil
+  "If nil, include changes when exporting, otherwise include only new text.")
+
+(defun org-change--before-processing (backend)
+  "Replace change markup in buffer before org parses it for BACKEND.
+This runs on a temporary copy of the buffer via
+`org-export-before-processing-functions', so modifications are
+safe and do not affect the original buffer."
+  (goto-char (point-min))
+  (while (re-search-forward org-change--regexp nil t)
+    (let* ((new-text (match-string 1))
+	   (old-text (match-string 2))
+	   (comment (or (match-string 3) ""))
+	   (replacement
+	    (if org-change-final
+		(if (equal new-text "") "" new-text)
+	      (let ((exporter (alist-get
+			       backend
+			       org-change--exporters
+			       nil nil
+			       #'org-export-derived-backend-p)))
+		(if exporter
+		    (funcall exporter old-text new-text comment)
+		  (user-error "Change markup not supported in %s export"
+			      backend))))))
+      (replace-match replacement t t))))
+
+(defun org-change-filter-final-output (text backend _)
+  "Add the changes.sty package to the LaTeX preamble.
+TEXT is the whole document and BACKEND is checked for being
+\\='latex or derived from \\='latex."
+  (if (and (org-export-derived-backend-p backend 'latex)
+	   (not org-change-final))
+      (replace-regexp-in-string
+       "\\\\begin{document}"
+       (concat
+	"\\\\usepackage"
+	(when (boundp 'org-change-latex-options) org-change-latex-options)
+	"{changes}\n\\\\begin{document}")
+       text)
+    text))
+
+(defun org-change--register-export-hooks ()
+  "Register org export hooks for change markup processing."
+  (add-to-list 'org-export-before-processing-functions
+	       #'org-change--before-processing)
+  (add-to-list 'org-export-filter-final-output-functions
+	       #'org-change-filter-final-output))
+
+(defun org-change--setup-export ()
+  "Set up export hooks, deferring if ox is not yet loaded."
+  (if (featurep 'ox)
+      (org-change--register-export-hooks)
+    (with-eval-after-load 'ox
+      (org-change--register-export-hooks))))
+
+;;; Minor mode definition
+
 (define-minor-mode org-change-mode
-  "Minor mode for annotating changes in `org-mode' files."
+  "Minor mode for annotating changes in text files."
   :lighter " Chg"
   :group 'org-change
   :keymap (let ((map (make-sparse-keymap)))
@@ -427,24 +551,16 @@ to buffer beginning and REND to buffer end."
             (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
             map)
-  (when org-change
-    (add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
-    (setq-local org-change--extra-space-flag nil)
-    (org-link-set-parameters
-     "change"
-     :follow #'org-change-open-link
-     :export #'org-change-export-link
-     :store #'org-change-store-link
-     :face 'org-change-link-face)
-    (org-change-fontify)))
-
-(defun org-change-open-link (_path _)
-  "Open a change link.  Currently does nothing."
-  (message "Opening a change link currently does nothing"))
-
-(defun org-change-store-link ()
-  "Store a change link.  Currently does nothing."
-  (message "Storing a change link currently does nothing"))
+  (if org-change-mode
+      (progn
+	(add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
+	(add-hook 'after-change-functions #'org-change--after-change nil t)
+	(org-change--setup-export)
+	(setq-local org-change--extra-space-flag nil)
+	(org-change-fontify))
+    (remove-hook 'post-self-insert-hook #'org-change--erase-extra-space t)
+    (remove-hook 'after-change-functions #'org-change--after-change t)
+    (org-change--remove-overlays)))
 
 (provide 'org-change)
 
