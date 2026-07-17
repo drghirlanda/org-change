@@ -41,6 +41,17 @@ the buffer."
   (goto-char end)
   (activate-mark))
 
+(defun org-change-tests--materialize (markup group)
+  "Reduce MARKUP to one side of its changes.
+GROUP 1 keeps the new text (accept all), GROUP 2 the old text
+\(reject all); equal text is left as is."
+  (with-temp-buffer
+    (insert markup)
+    (goto-char (point-min))
+    (while (org-change--search-forward nil t)
+      (replace-match (org-change--decode (or (match-string group) "")) t t))
+    (buffer-string)))
+
 ;;; Fontification of the empty change {!!}{!!}
 
 (ert-deftest org-change-test-empty-change-is-not-shown-as-deletion ()
@@ -419,6 +430,67 @@ rejecting restores the text exactly."
     (should (member "No previous change"
 		    (org-change-tests--messages-while #'org-change-previous-change)))
     (should (= (point) 6))))
+
+;;; Generating changes from two versions
+
+(ert-deftest org-change-test-diff-identical-produces-no-markup ()
+  "Diffing a version against itself leaves the text untouched."
+  (let ((s "the quick brown fox\njumped over"))
+    (should (equal (org-change--diff-to-markup s s) s))))
+
+(ert-deftest org-change-test-diff-replacement ()
+  "A changed word becomes a replacement."
+  (should (equal (org-change--diff-to-markup "the cat" "the dog")
+		 "the {!dog!}{!cat!}")))
+
+(ert-deftest org-change-test-diff-round-trips-to-new-and-old ()
+  "The markup accepts to the new version and rejects to the old one."
+  (dolist (pair '(("the cat sat" . "the dog sat")	; replacement
+		  ("a c" . "a b c")			; addition
+		  ("a b c" . "a c")			; deletion
+		  ("hello world" . "hi there")		; multi-word change
+		  ("keep\nold line\nkeep" . "keep\nnew line\nkeep") ; multi-line
+		  ("" . "all new")			; from empty
+		  ("all gone" . "")))			; to empty
+    (let* ((old (car pair))
+	   (new (cdr pair))
+	   (markup (org-change--diff-to-markup old new)))
+      (should (equal (org-change-tests--materialize markup 1) new))
+      (should (equal (org-change-tests--materialize markup 2) old)))))
+
+(ert-deftest org-change-test-diff-encodes-delimiters-in-content ()
+  "Diffed text that contains the delimiters still round-trips."
+  (let* ((old "a plain b")
+	 (new "a x!}y{!z b")
+	 (markup (org-change--diff-to-markup old new)))
+    (should (equal (org-change-tests--materialize markup 1) new))
+    (should (equal (org-change-tests--materialize markup 2) old))))
+
+(ert-deftest org-change-test-from-diff-file-replaces-buffer ()
+  "`org-change-from-diff' shows the incoming file version as changes
+over the buffer: the buffer is the base, so it becomes the old text
+and rejecting restores it."
+  (let ((new-file (make-temp-file "org-change-new")))
+    (unwind-protect
+	(progn
+	  (with-temp-file new-file (insert "the cat"))
+	  (with-temp-buffer
+	    (insert "the dog")		; the base version, in the buffer
+	    (setq buffer-file-name nil)
+	    (org-change-from-diff (cons 'file new-file))
+	    (should (equal (buffer-string) "the {!cat!}{!dog!}"))
+	    (should org-change-mode)
+	    ;; Rejecting keeps the buffer's original text.
+	    (should (equal (org-change-tests--materialize (buffer-string) 2)
+			   "the dog"))))
+      (delete-file new-file))))
+
+(ert-deftest org-change-test-from-diff-git-bails-without-a-file ()
+  "Git mode reports clearly when the buffer visits no file."
+  (with-temp-buffer
+    (insert "text")
+    (should-error (org-change-from-diff (cons 'git "HEAD"))
+		  :type 'user-error)))
 
 (provide 'org-change-tests)
 

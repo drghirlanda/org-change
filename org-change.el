@@ -29,7 +29,8 @@
 ;; org-change-replace (C-` r).  Accept or reject changes with
 ;; org-change-accept (C-` k) and org-change-reject (C-` x).  Move
 ;; between changes with org-change-next-change (C-` n) and
-;; org-change-previous-change (C-` p).  When
+;; org-change-previous-change (C-` p).  Generate change markup from
+;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
 ;; org-change.  More information at the package URL.
@@ -553,6 +554,164 @@ no earlier change, leave point where it is and say so."
   (interactive)
   (setq org-change-show-deleted (not org-change-show-deleted))
   (org-change-fontify))
+
+;;; Generating changes from two versions
+
+(defun org-change--tokenize (string)
+  "Split STRING into a list of word and non-word runs.
+Concatenating the result reproduces STRING.  Splitting on word
+boundaries makes the diff align on words, so changes read
+naturally rather than character by character."
+  (let ((tokens nil)
+	(start 0)
+	(len (length string)))
+    (while (< start len)
+      (string-match "[[:word:]]+\\|[^[:word:]]+" string start)
+      (push (substring string start (match-end 0)) tokens)
+      (setq start (match-end 0)))
+    (nreverse tokens)))
+
+(defun org-change--diff-ops (old new)
+  "Return diff operations turning token list OLD into token list NEW.
+Each operation is a cons: (equal . TOKEN), (old . TOKEN) for a
+token only in OLD, or (new . TOKEN) for a token only in NEW.  Uses
+a longest-common-subsequence table, so the shared text is kept and
+only the differences are marked."
+  (let* ((a (vconcat old))
+	 (b (vconcat new))
+	 (n (length a))
+	 (m (length b))
+	 (w (1+ m))
+	 (dp (make-vector (* (1+ n) w) 0))
+	 (i (1- n)))
+    ;; Fill the LCS-length table from the bottom-right corner.
+    (while (>= i 0)
+      (let ((j (1- m)))
+	(while (>= j 0)
+	  (aset dp (+ (* i w) j)
+		(if (equal (aref a i) (aref b j))
+		    (1+ (aref dp (+ (* (1+ i) w) (1+ j))))
+		  (max (aref dp (+ (* (1+ i) w) j))
+		       (aref dp (+ (* i w) (1+ j))))))
+	  (setq j (1- j))))
+      (setq i (1- i)))
+    ;; Walk the table from the top-left to recover the operations.
+    (let ((ops nil) (i 0) (j 0))
+      (while (and (< i n) (< j m))
+	(cond
+	 ((equal (aref a i) (aref b j))
+	  (push (cons 'equal (aref a i)) ops)
+	  (setq i (1+ i) j (1+ j)))
+	 ((>= (aref dp (+ (* (1+ i) w) j)) (aref dp (+ (* i w) (1+ j))))
+	  (push (cons 'old (aref a i)) ops)
+	  (setq i (1+ i)))
+	 (t
+	  (push (cons 'new (aref b j)) ops)
+	  (setq j (1+ j)))))
+      (while (< i n) (push (cons 'old (aref a i)) ops) (setq i (1+ i)))
+      (while (< j m) (push (cons 'new (aref b j)) ops) (setq j (1+ j)))
+      (nreverse ops))))
+
+(defun org-change--change-markup (new old)
+  "Return change markup for NEW replacing OLD.
+Either string may be empty, giving an addition or a deletion; both
+empty gives the empty string.  Content is escaped so delimiters in
+the diffed text are safe."
+  (cond
+   ((and (equal old "") (equal new "")) "")
+   ((equal old "") (format "{!%s!}{!!}" (org-change--encode new)))
+   ((equal new "") (format "{!!}{!%s!}" (org-change--encode old)))
+   (t (format "{!%s!}{!%s!}"
+	      (org-change--encode new)
+	      (org-change--encode old)))))
+
+(defun org-change--diff-to-markup (old new)
+  "Return the string NEW annotated with change markup relative to OLD.
+OLD and NEW are strings.  Text only in NEW becomes an addition,
+text only in OLD a deletion, and a changed span a replacement;
+shared text is left verbatim.  Adjacent differing tokens are
+coalesced into a single change.  The result round-trips: accepting
+every change yields NEW, rejecting every change yields OLD."
+  (let ((ops (org-change--diff-ops (org-change--tokenize old)
+				   (org-change--tokenize new)))
+	(pieces nil)
+	(old-run "")
+	(new-run ""))
+    (dolist (op ops)
+      (pcase (car op)
+	('equal
+	 (push (org-change--change-markup new-run old-run) pieces)
+	 (setq old-run "" new-run "")
+	 (push (cdr op) pieces))
+	('old (setq old-run (concat old-run (cdr op))))
+	('new (setq new-run (concat new-run (cdr op))))))
+    (push (org-change--change-markup new-run old-run) pieces)
+    (apply #'concat (nreverse pieces))))
+
+(defun org-change--file-string (file)
+  "Return the contents of FILE as a string."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-string)))
+
+(defun org-change--git-string (rev)
+  "Return the current buffer's file contents at git revision REV.
+Signal a `user-error' if git, the file, or the revision is not
+available, so the buffer is left untouched."
+  (unless (executable-find "git")
+    (user-error "Git is not available; compare against a file instead"))
+  (let ((file (buffer-file-name)))
+    (unless file
+      (user-error "Buffer is not visiting a file; compare against a file instead"))
+    (let* ((default-directory (file-name-directory file))
+	   (root (ignore-errors
+		   (with-temp-buffer
+		     (when (zerop (call-process "git" nil t nil
+						"rev-parse" "--show-toplevel"))
+		       (string-trim (buffer-string)))))))
+      (unless root
+	(user-error "%s is not in a git repository" file))
+      (let ((rel (file-relative-name file root)))
+	(with-temp-buffer
+	  (unless (zerop (call-process "git" nil t nil
+				       "show" (format "%s:%s" rev rel)))
+	    (user-error "Cannot read %s at git revision %s" rel rev))
+	  (buffer-string))))))
+
+(defun org-change-from-diff (source)
+  "Rewrite the current buffer to review the changes SOURCE brings in.
+The current buffer is the base version; SOURCE provides the new
+version, as a cons cell, either (file . FILENAME) or (git . REVISION).
+The differences are shown as tracked changes over the buffer, so
+accepting them adopts SOURCE's text and rejecting them keeps the
+buffer as it was.
+
+Interactively, prompt for a file holding the new version; with a
+prefix argument, prompt instead for a git revision (default HEAD)
+and use the buffer's own file as it was at that revision.  Git mode
+signals an error, leaving the buffer untouched, when git or the
+file is not available.
+
+The buffer is replaced in a single undoable step, so `undo'
+restores it as well."
+  (interactive
+   (list (if current-prefix-arg
+	     (cons 'git (read-string "New version -- git revision: " "HEAD"))
+	   (cons 'file (read-file-name "New version file: " nil nil t)))))
+  (let* ((base (buffer-string))
+	 (incoming (pcase source
+		     (`(file . ,f) (org-change--file-string f))
+		     (`(git . ,rev) (org-change--git-string rev))
+		     (_ (user-error "Invalid diff source: %S" source))))
+	 (markup (org-change--diff-to-markup base incoming)))
+    (atomic-change-group
+      (delete-region (point-min) (point-max))
+      (insert markup)
+      (goto-char (point-min)))
+    (unless org-change-mode (org-change-mode 1))
+    (org-change-fontify)
+    (message "Showing changes from %s -- accept to adopt them, reject to keep yours"
+	     (pcase source (`(file . ,f) f) (`(git . ,rev) rev)))))
 
 ;;; Converting from old link syntax
 

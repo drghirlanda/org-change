@@ -90,6 +90,26 @@ Key sequences are also provided to accept or reject changes:
 
 If there is no change under the cursor, accept and reject work on all changes in the active region. If there is no active region, nothing happens. You can accept or reject all changes in a document by selecting the whole buffer, but note that this deletes all changes. If you just want to export a clean manuscript, see section [[Producing a clean document]].
 
+* Generating changes from two versions
+
+If you already have two versions of a document -- say your draft and a revised copy from a coauthor -- you do not have to mark every change by hand. The command ~M-x org-change-from-diff~ takes the version in your buffer as the base, compares it against another version, and rewrites the buffer so the differences appear as tracked changes: text the other version adds is an addition, text it drops is a deletion, and reworded spans are replacements. Shared text is left untouched.
+
+Because the changes are shown *over* your buffer, accepting them adopts the other version's text and rejecting them keeps what you had. In particular, rejecting all changes restores the buffer to its state before you ran the command.
+
+The other version can come from either a file or git:
+- By default, ~org-change-from-diff~ prompts for a *file* holding the other version.
+- With a prefix argument (~C-u M-x org-change-from-diff~), it prompts for a *git revision* instead (default ~HEAD~) and uses the current buffer's own file as it was at that revision. If git is unavailable, the buffer is not under version control, or the revision cannot be read, the command reports the problem and leaves the buffer untouched, so you can fall back to the file version. Note that with git, accepting a change adopts the revision's text, so comparing against an older commit and accepting means reverting to it.
+
+The comparison is word-based, so changes align on words and read naturally rather than character by character. If your buffer holds =The quick brown fox jumps.= and the other version is =The quick red fox leaps high.=, the buffer becomes
+#+begin_src org
+  The quick {!red!}{!brown!} fox {!leaps high!}{!jumps!}.
+#+end_src
+where ~red~ and ~leaps high~ are the incoming text and ~brown~ and ~jumps~ are yours.
+
+The buffer is replaced in a single step, so ~undo~ restores it too. A couple of things to keep in mind:
+- The comparison cost grows with the product of the two versions' sizes, so it is meant for documents and sections rather than very large files. If it is slow, run it on a narrowed region.
+- Word alignment means a change may include the surrounding spaces (for instance ={!red !}{!brown !}=); this is cosmetic and accepts and rejects correctly.
+
 * Showing deleted text
 
 By default, org-change hides replaced text and shows deleted text with a cross. You can choose to show this text by setting ~org-change-show-deleted~ to a non-nil value. The text will then be shown in the customizable face ~org-change-deleted-face~ after the change markup, and will be read-only. This is similar to some word processors, where deleted text is shown as strike-through (but you don't have to use strike-through).
