@@ -27,7 +27,9 @@
 ;; major mode.  Mark additions with org-change-add (C-` a), deletions
 ;; with org-change-delete (C-` d), and replacements with
 ;; org-change-replace (C-` r).  Accept or reject changes with
-;; org-change-accept (C-` k) and org-change-reject (C-` x).  When
+;; org-change-accept (C-` k) and org-change-reject (C-` x).  Move
+;; between changes with org-change-next-change (C-` n) and
+;; org-change-previous-change (C-` p).  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
 ;; org-change.  More information at the package URL.
@@ -96,6 +98,16 @@ The deleted/replaced text is shown in the face
 
 (defcustom org-change-fontify-key (kbd "C-` f")
   "Keybinding for `org-change-fontify'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-next-key (kbd "C-` n")
+  "Keybinding for `org-change-next-change'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-previous-key (kbd "C-` p")
+  "Keybinding for `org-change-previous-change'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -499,6 +511,43 @@ otherwise process the whole buffer."
       (deactivate-mark)))
   (message "No more changes"))
 
+;;; Navigation between changes
+
+(defun org-change-next-change ()
+  "Move point to the beginning of the next change.
+If point is inside a change, move to the one after it.  If there is
+no later change, leave point where it is and say so."
+  (interactive)
+  (let* ((origin (point))
+	 (here (org-change--at-change))
+	 ;; Start past the current change: searching from inside one, the
+	 ;; parser could latch onto its second `{!' field and mis-span.
+	 (start (if here (cdr here) origin))
+	 (dest nil))
+    (save-excursion
+      (goto-char start)
+      (when (org-change--search-forward nil t)
+	(setq dest (match-beginning 0))))
+    (if (and dest (> dest origin))
+	(goto-char dest)
+      (message "No next change"))))
+
+(defun org-change-previous-change ()
+  "Move point to the beginning of the previous change.
+If point is inside a change, move to the one before it.  If there is
+no earlier change, leave point where it is and say so."
+  (interactive)
+  (let ((origin (point))
+	(dest nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (org-change--search-forward origin t)
+	(when (< (match-beginning 0) origin)
+	  (setq dest (match-beginning 0)))))
+    (if dest
+	(goto-char dest)
+      (message "No previous change"))))
+
 (defun org-change-toggle-deleted-text ()
   "Show/hide deleted text."
   (interactive)
@@ -685,6 +734,8 @@ TEXT is the whole document and BACKEND is checked for being
             (define-key map org-change-reject-key #'org-change-reject)
             (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
+            (define-key map org-change-next-key #'org-change-next-change)
+            (define-key map org-change-previous-key #'org-change-previous-change)
             map)
   (if org-change-mode
       (progn

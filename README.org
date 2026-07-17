@@ -69,6 +69,13 @@ The key sequences are:
 - ~C-` r~ :: for replacements.
 All these act on the active region, marking it as added, deleted, or replaced text. In the case of replacement, the region is "deleted" (that is, tucked away in the hidden part of the change markup) and you can enter text in its place. You can also use ~C-` a~ without marking a region, in which case you can start entering new text.
 
+** Moving between changes
+
+To jump from change to change, use:
+- ~C-` n~ :: move to the next change.
+- ~C-` p~ :: move to the previous change.
+Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it. When there is no change to move to, org-change leaves point where it is and reports "No next change" or "No previous change" in the minibuffer.
+
 ** Moving text
 
 To move sections of text from one place to another, you can use the key sequences ~C-` w~ for killing (Emacspeak for "cutting") and ~C-` y~ for yanking (Emacspeak for "pasting"). These work like ~C-w~ and ~C-y~ but mark the killed text as a deletion and the yanked text as an addition.

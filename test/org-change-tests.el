@@ -368,6 +368,58 @@ rejecting restores the text exactly."
     (org-change-reject)
     (should (equal (buffer-string) "see \\(a=1\\) now"))))
 
+;;; Navigation between changes
+
+;; Buffer used below: "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc"
+;; change 1 begins at position 4, change 2 begins at position 20.
+
+(ert-deftest org-change-test-next-goes-to-first-change ()
+  "From before any change, next moves to the first change."
+  (with-temp-buffer
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (org-change-next-change)
+    (should (= (point) 4))))
+
+(ert-deftest org-change-test-next-skips-the-current-change ()
+  "From inside a change, next moves to the following change, not this one."
+  (with-temp-buffer
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 6)			; inside change 1
+    (org-change-next-change)
+    (should (= (point) 20))))
+
+(ert-deftest org-change-test-next-at-last-change-messages-and-stays ()
+  "With no change ahead, next reports it and leaves point put."
+  (with-temp-buffer
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 22)			; inside change 2, the last one
+    (should (member "No next change"
+		    (org-change-tests--messages-while #'org-change-next-change)))
+    (should (= (point) 22))))
+
+(ert-deftest org-change-test-previous-goes-to-previous-change ()
+  "From inside a change, previous moves to the change before it."
+  (with-temp-buffer
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 22)			; inside change 2
+    (org-change-previous-change)
+    (should (= (point) 4))))
+
+(ert-deftest org-change-test-previous-at-first-change-messages-and-stays ()
+  "With no change behind, previous reports it and leaves point put."
+  (with-temp-buffer
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 6)			; inside change 1, the first one
+    (should (member "No previous change"
+		    (org-change-tests--messages-while #'org-change-previous-change)))
+    (should (= (point) 6))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
