@@ -492,6 +492,56 @@ and rejecting restores it."
     (should-error (org-change-from-diff (cons 'git "HEAD"))
 		  :type 'user-error)))
 
+;;; Revealing folded changes when navigating
+
+(defun org-change-tests--change-pos (n)
+  "Return the buffer position of the Nth change (1-based)."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((i 0) (pos nil))
+      (while (and (< i n) (org-change--search-forward nil t))
+	(setq i (1+ i) pos (match-beginning 0)))
+      pos)))
+
+(ert-deftest org-change-test-jump-reveals-a-folded-change ()
+  "Jumping to a change under a folded heading reveals it."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\nintro {!x!}{!y!} end\n* B\ntail\n")
+    (org-change-mode 1)
+    (org-fold-hide-sublevels 1)
+    (let ((change (org-change-tests--change-pos 1)))
+      (should (org-fold-folded-p change))	; folded to begin with
+      (goto-char (point-min))
+      (org-change-next-change)
+      (should (org-change--at-change))		; landed on the change
+      (should-not (org-fold-folded-p (point)))))) ; and it is visible
+
+(ert-deftest org-change-test-next-jump-restores-the-previous-reveal ()
+  "Stepping to the next change re-folds the one the last step opened."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\nintro {!x!}{!y!} end\n* B\nmore {!p!}{!q!} tail\n")
+    (org-change-mode 1)
+    (org-fold-hide-sublevels 1)
+    (goto-char (point-min))
+    (org-change-next-change)			; reveal change in A
+    (let ((first (point)))
+      (should-not (org-fold-folded-p first))
+      (org-change-next-change)			; move to B, restore A
+      (should-not (org-fold-folded-p (point)))	; B revealed
+      (should (org-fold-folded-p first)))))	; A folded again
+
+(ert-deftest org-change-test-reveal-is-a-noop-outside-org ()
+  "Navigation still works in a non-org buffer, with nothing to reveal."
+  (with-temp-buffer
+    (insert "a {!n1!}{!o1!} b {!n2!}{!o2!} c")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (org-change-next-change)
+    (should (= (point) 3))
+    (should-not org-change--fold-restore)))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

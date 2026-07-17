@@ -514,10 +514,50 @@ otherwise process the whole buffer."
 
 ;;; Navigation between changes
 
+(declare-function org-fold-folded-p "org-fold" (&optional pos spec-or-alias))
+(declare-function org-fold-show-set-visibility "org-fold" (detail))
+(declare-function org-fold-core-get-regions "org-fold-core"
+		  (&rest keyword-args))
+(declare-function org-fold-core-regions "org-fold-core" (regions &rest args))
+
+(defvar-local org-change--fold-restore nil
+  "Function that restores the fold state saved before the last jump.
+Nil when there is nothing to restore.  See `org-change--reveal'.")
+
+(defun org-change--restore-fold ()
+  "Restore the fold state saved by the previous jump, if any."
+  (when org-change--fold-restore
+    (funcall org-change--fold-restore)
+    (setq org-change--fold-restore nil)))
+
+(defun org-change--reveal ()
+  "Reveal point if org folding hides it, saving the prior fold state.
+The saved state is restored on the next jump, so stepping to the
+next or previous change re-folds whatever this jump opened.  Does
+nothing outside `org-mode'."
+  (when (and (derived-mode-p 'org-mode)
+	     (fboundp 'org-fold-folded-p)
+	     (org-fold-folded-p (point)))
+    (let ((saved (org-fold-core-get-regions :with-markers t)))
+      (setq org-change--fold-restore
+	    (lambda ()
+	      (org-fold-core-regions saved :override t :clean-markers t))))
+    (org-fold-show-set-visibility 'canonical)))
+
+(defun org-change--goto-change (dest)
+  "Move to DEST, restoring the previous reveal and revealing DEST."
+  (org-change--restore-fold)
+  (goto-char dest)
+  (org-change--reveal))
+
 (defun org-change-next-change ()
   "Move point to the beginning of the next change.
 If point is inside a change, move to the one after it.  If there is
-no later change, leave point where it is and say so."
+no later change, leave point where it is and say so.
+
+When the target change is hidden by org folding, reveal it; the
+previous reveal is restored, so each jump shows one change at a
+time."
   (interactive)
   (let* ((origin (point))
 	 (here (org-change--at-change))
@@ -530,13 +570,17 @@ no later change, leave point where it is and say so."
       (when (org-change--search-forward nil t)
 	(setq dest (match-beginning 0))))
     (if (and dest (> dest origin))
-	(goto-char dest)
+	(org-change--goto-change dest)
       (message "No next change"))))
 
 (defun org-change-previous-change ()
   "Move point to the beginning of the previous change.
 If point is inside a change, move to the one before it.  If there is
-no earlier change, leave point where it is and say so."
+no earlier change, leave point where it is and say so.
+
+When the target change is hidden by org folding, reveal it; the
+previous reveal is restored, so each jump shows one change at a
+time."
   (interactive)
   (let ((origin (point))
 	(dest nil))
@@ -546,7 +590,7 @@ no earlier change, leave point where it is and say so."
 	(when (< (match-beginning 0) origin)
 	  (setq dest (match-beginning 0)))))
     (if dest
-	(goto-char dest)
+	(org-change--goto-change dest)
       (message "No previous change"))))
 
 (defun org-change-toggle-deleted-text ()
@@ -908,6 +952,7 @@ TEXT is the whole document and BACKEND is checked for being
     (remove-hook 'after-change-functions #'org-change--after-change t)
     (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
     (org-change--forget-extra-space)
+    (setq org-change--fold-restore nil)
     (org-change--remove-overlays)))
 
 (provide 'org-change)
