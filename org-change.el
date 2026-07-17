@@ -545,10 +545,17 @@ nothing outside `org-mode'."
     (org-fold-show-set-visibility 'canonical)))
 
 (defun org-change--goto-change (dest)
-  "Move to DEST, restoring the previous reveal and revealing DEST."
+  "Move to DEST, restoring the previous reveal, revealing DEST, and
+recentering the window as `recenter-top-bottom' (\\[recenter-top-bottom]) does."
   (org-change--restore-fold)
   (goto-char dest)
-  (org-change--reveal))
+  (org-change--reveal)
+  (when (get-buffer-window (current-buffer))
+    ;; Center the change like C-l.  Bind `last-command' so that
+    ;; pressing the jump key repeatedly keeps centering rather than
+    ;; cycling `recenter-top-bottom' to the top and bottom.
+    (let ((last-command nil))
+      (recenter-top-bottom))))
 
 (defun org-change-next-change ()
   "Move point to the beginning of the next change.
