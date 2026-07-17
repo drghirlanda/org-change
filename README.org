@@ -47,6 +47,18 @@ Because the syntax uses ~{!~ and ~!}~ as delimiters, you can freely include org 
   {!see [[https://example.com][this link]] and $E=mc^2$!}{!old text!}
 #+end_src
 
+** Escaping the delimiters
+
+The one thing a change cannot contain verbatim is a delimiter itself: the two-character sequences ~{!~ and ~!}~. If your text has them, the parser would mistake them for markup. To handle this, org-change escapes those sequences when it creates a change from a region, inserting a backslash to break the pair: ~{!~ becomes ~{\!~ and ~!}~ becomes ~!\}~. So marking the text =a!}b= as a deletion stores it as
+#+begin_src org
+  {!!}{!a!\}b!}
+#+end_src
+The escaping is undone automatically when you accept, reject, or export the change, so you always get back the original =a!}b=. Only the delimiter sequences are touched; any other backslash (for example in ~\LaTeX~ or ~\(a=1\)~) is left exactly as it is.
+
+Two things to keep in mind:
+- Escaping happens for text taken from a *region* (add, delete, replace, kill/yank). Text you *type by hand* into a change is inserted verbatim, so a hand-typed ~{!~ or ~!}~ is not escaped. This is a deliberate trade-off: it is a rare thing to do, and intercepting every keystroke would be intrusive.
+- In the annotated buffer you will see the backslash in the rare escaped change (=a!\}b=). It disappears when the change is accepted, rejected, or exported.
+
 * Change manipulation
 
 org-change provides key sequences to easily manipulate change markup. All key sequences start with ~C-`~ (control + left quote). Not the prettiest, but few control prefixes are free. It's the curse of keymensionality. To change it, see section [[Customization]].
@@ -167,6 +179,8 @@ Please submit bugs and feature requests as [[https://github.com/drghirlanda/org-
 - The content of change markup is exported as raw LaTeX (or raw HTML), bypassing org-mode's markup processing. Use the target format's commands directly inside changes.
 
 - LaTeX export is not fully compatible with HTML export if you use the extended comment syntax. That is, HTML export does not handle extra arguments like "author=SG," which are a feature of the ~changes~ package for LaTeX.
+
+- The delimiter escaping described under [[Escaping the delimiters]] applies to text taken from a region, not to text typed by hand into a change. A hand-typed ~{!~ or ~!}~ is left verbatim and can confuse the parser. Escaping also assumes your content does not already contain the exact escaped forms ~{\!~ or ~!\}~; on the rare occasion it does, they will be turned back into ~{!~ and ~!}~ when the change is materialized.
 
 * Notes
 

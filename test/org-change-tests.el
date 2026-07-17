@@ -282,6 +282,92 @@ and rejecting one of them must still touch only that one."
 		   (concat "@@latex:\\replaced[comment=cmt]{new}{old}@@"
 			   " @@latex:\\replaced{new2}{old2}@@")))))
 
+;;; Escaping delimiters in change content
+
+(ert-deftest org-change-test-encode-decode-round-trips ()
+  "Encoding then decoding returns the original string."
+  (dolist (s '("plain text"
+	       "has a close !} in it"
+	       "has an open {! in it"
+	       "both {! and !} here"
+	       "the tricky {!} sequence"
+	       "\\LaTeX and \\(a=1\\) backslashes"))
+    (should (equal (org-change--decode (org-change--encode s)) s))))
+
+(ert-deftest org-change-test-encode-leaves-bare-latex-backslashes-alone ()
+  "Encoding touches only the delimiters, never other backslashes."
+  (should (equal (org-change--encode "\\(a=1\\)") "\\(a=1\\)")))
+
+(ert-deftest org-change-test-encoded-content-has-no-bare-delimiters ()
+  "Encoded content must not contain the bare delimiters that would
+confuse the parser."
+  (let ((enc (org-change--encode "x!}y{!z")))
+    (should-not (string-match-p (regexp-quote "!}") enc))
+    (should-not (string-match-p (regexp-quote "{!") enc))))
+
+(ert-deftest org-change-test-delete-region-containing-close-delimiter ()
+  "Deleting a region that contains !} produces valid markup, and
+rejecting restores the text exactly."
+  (with-temp-buffer
+    (insert "a x!}y b")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 3 7)	; "x!}y"
+    (org-change-delete)
+    ;; The change parses as exactly one change.
+    (goto-char 4)
+    (should (org-change--at-change))
+    (org-change-reject)
+    (should (equal (buffer-string) "a x!}y b"))))
+
+(ert-deftest org-change-test-replace-region-containing-open-delimiter ()
+  "Replacing a region that contains {! and rejecting restores it."
+  (with-temp-buffer
+    (insert "a {!x b")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 3 6)	; "{!x"
+    (org-change-replace)
+    (goto-char 4)
+    (org-change-reject)
+    (should (equal (buffer-string) "a {!x b"))))
+
+(ert-deftest org-change-test-accept-decodes-new-text ()
+  "Accepting an addition whose new text contained !} restores it."
+  (with-temp-buffer
+    (insert "p!}q")
+    (org-change-mode 1)
+    (org-change-tests--mark-region (point-min) (point-max))
+    (org-change-add)
+    (goto-char 4)
+    (org-change-accept)
+    (should (equal (buffer-string) "p!}q"))))
+
+(ert-deftest org-change-test-export-decodes-content ()
+  "Export materializes the real content, not its escaped form."
+  (with-temp-buffer
+    (insert "{!a!\\}b!}{!old!}")	; new text is the escaped "a!}b"
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string) "@@latex:\\replaced{a!}b}{old}@@"))))
+
+(ert-deftest org-change-test-escaped-delimiter-does-not-merge-adjacent ()
+  "An escaped !} in one change's content must not swallow the next change."
+  (with-temp-buffer
+    (insert "{!!}{!x!\\}y!}{!A!}{!B!}")	; deletion of "x!}y", then a replacement
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string)
+		   (concat "@@latex:\\deleted{x!}y}@@"
+			   "@@latex:\\replaced{A}{B}@@")))))
+
+(ert-deftest org-change-test-latex-backslashes-survive-a-change ()
+  "Marking LaTeX as a deletion and rejecting restores it verbatim."
+  (with-temp-buffer
+    (insert "see \\(a=1\\) now")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 5 11)	; "\\(a=1\\)"
+    (org-change-delete)
+    (goto-char 6)
+    (org-change-reject)
+    (should (equal (buffer-string) "see \\(a=1\\) now"))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

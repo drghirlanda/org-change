@@ -162,6 +162,22 @@ stray `{!d!}'."
       (re-search-forward org-change--pair-regexp bound noerror))
     t))
 
+(defun org-change--encode (text)
+  "Escape the change delimiters `{!' and `!}' inside TEXT.
+Content selected for a change may itself contain the delimiter
+sequences.  A backslash is inserted to break the two-character
+adjacency the parser scans for, so `{!' becomes `{\\!' and `!}'
+becomes `!\\}'.  Only those exact sequences are touched; every
+other backslash is left alone, so LaTeX such as \\=\\(a=1\\=\\) inside a
+change survives unchanged.  `org-change--decode' reverses this."
+  (string-replace "!}" "!\\}"
+		  (string-replace "{!" "{\\!" text)))
+
+(defun org-change--decode (text)
+  "Undo `org-change--encode' on TEXT, restoring `{!' and `!}'."
+  (string-replace "{\\!" "{!"
+		  (string-replace "!\\}" "!}" text)))
+
 (defun org-change--get-region ()
   "Return content of active region or nil."
   (when (use-region-p)
@@ -275,7 +291,9 @@ BEG and END are the modified region boundaries."
   (when (use-region-p)
     (delete-region (region-beginning) (region-end)))
   (let ((beg (point)))
-    (insert (format "{!%s!}{!%s!}" new-text old-text))
+    (insert (format "{!%s!}{!%s!}"
+		    (org-change--encode new-text)
+		    (org-change--encode old-text)))
     (org-change-fontify beg (point))))
 
 (defun org-change-replace ()
@@ -289,7 +307,7 @@ type the new text."
       (when (use-region-p)
 	(delete-region (region-beginning) (region-end)))
       (let ((beg (point)))
-	(insert (format "{! !}{!%s!}" old-text))
+	(insert (format "{! !}{!%s!}" (org-change--encode old-text)))
 	(org-change-fontify beg (point))
 	;; place point inside the new text, on the space
 	(goto-char (+ beg 2))
@@ -317,7 +335,13 @@ Used together with `org-change-kill' to move text around."
   (interactive)
   (let ((beg (point)))
     (insert "{!")
-    (yank)
+    (let ((yank-beg (point)))
+      (yank)
+      ;; Escape any delimiters in the yanked text in place.
+      (let ((text (org-change--encode
+		   (buffer-substring-no-properties yank-beg (point)))))
+	(delete-region yank-beg (point))
+	(insert text)))
     (insert "!}{!!}")
     (org-change-fontify beg (point))))
 
@@ -329,7 +353,7 @@ If there is no active region, insert an empty addition for typing."
     (when (use-region-p)
       (delete-region (region-beginning) (region-end)))
     (let ((beg (point)))
-      (insert (format "{!%s!}{!!}" new-text))
+      (insert (format "{!%s!}{!!}" (org-change--encode new-text)))
       (org-change-fontify beg (point))
       (when (equal new-text " ")
 	;; place point on the space for typing
@@ -419,8 +443,8 @@ the active region."
   (let ((change-position (org-change--at-change))
 	(inhibit-read-only t))
     (if change-position
-	(let ((new-text (match-string-no-properties 1))
-	      (old-text (match-string-no-properties 2))
+	(let ((new-text (org-change--decode (match-string-no-properties 1)))
+	      (old-text (org-change--decode (match-string-no-properties 2)))
 	      (beg (car change-position))
 	      (end (cdr change-position)))
 	  (org-change--remove-overlays beg end)
@@ -508,8 +532,12 @@ This requires `org-mode' to be available for `org-link-unescape'."
 	       ;; Deletion: new text is the deleted marker
 	       (new-text (if (equal new-text org-change-deleted-marker) "" new-text))
 	       (replacement
-		(concat (format "{!%s!}{!%s!}" new-text old-text)
-			(if comment (format "{!%s!}" comment) ""))))
+		(concat (format "{!%s!}{!%s!}"
+				(org-change--encode new-text)
+				(org-change--encode old-text))
+			(if comment
+			    (format "{!%s!}" (org-change--encode comment))
+			  ""))))
 	  (delete-region mbeg mend)
 	  (goto-char mbeg)
 	  (insert replacement)
@@ -590,9 +618,9 @@ This runs on a temporary copy of the buffer via
 safe and do not affect the original buffer."
   (goto-char (point-min))
   (while (org-change--search-forward nil t)
-    (let* ((new-text (match-string 1))
-	   (old-text (match-string 2))
-	   (comment (or (match-string 3) ""))
+    (let* ((new-text (org-change--decode (match-string 1)))
+	   (old-text (org-change--decode (match-string 2)))
+	   (comment (org-change--decode (or (match-string 3) "")))
 	   (replacement
 	    (cond
 	     ;; An empty change has nothing to export
