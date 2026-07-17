@@ -1,6 +1,6 @@
 ;;; org-change.el --- Annotate changes in text files -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023 Stefano Ghirlanda
+;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
 ;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1"))
