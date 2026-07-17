@@ -161,67 +161,75 @@ The deleted/replaced text is shown in the face
   "Fontify change markup using overlays.
 Called automatically when Org Change mode starts.  Optional
 arguments RBEG and REND delimit the region to fontify.  If nil,
-RBEG is set to buffer beginning and REND to buffer end."
+RBEG is set to buffer beginning and REND to buffer end.
+
+Fontifying the whole buffer can take a while, so it reports
+progress in the echo area.  Fontifying a region the caller names
+is quick, and stays silent: it happens on every keystroke, and the
+echo area is needed for other things."
   (interactive)
-  (setq rbeg (or rbeg (point-min))
-	rend (or rend (point-max)))
-  (org-change--remove-overlays rbeg rend)
-  (save-excursion
-    (goto-char rbeg)
-    (while (re-search-forward org-change--regexp rend t)
-      (let* ((full-beg (match-beginning 0))
-	     (full-end (match-end 0))
-	     (new-text (match-string 1))
-	     (old-text (match-string 2))
-	     (new-beg (match-beginning 1))
-	     (new-end (match-end 1))
-	     (open-beg full-beg)        ; {!
-	     (open-end (+ full-beg 2))  ; after {!
-	     (mid-beg new-end))         ; start of !}{!old!}...
-	(message "Fontifying changes (%d%%)"
-		 (* 100 (/ (float full-end) (point-max))))
-	(cond
-	 ;; Empty change: neither new nor old text.  Show the same
-	 ;; placeholder `org-change-add' starts out with, so that typing
-	 ;; resumes the addition.  `org-change--cleanup-empty' removes
-	 ;; the markup once point leaves it.
-	 ((and (equal new-text "") (equal old-text ""))
-	  (org-change--make-overlay full-beg full-end
-				    'display " "
-				    'face 'org-change-link-face))
-	 ;; Deletion: new text is empty
-	 ((equal new-text "")
-	  ;; Hide everything, show deleted marker
-	  (org-change--make-overlay full-beg full-end
-				    'display org-change-deleted-marker
-				    'face 'org-change-link-face)
-	  (when org-change-show-deleted
-	    ;; Also show old text after the marker
-	    (let ((ov (make-overlay full-end full-end nil t nil)))
-	      (overlay-put ov 'org-change-overlay t)
-	      (overlay-put ov 'evaporate t)
-	      (overlay-put ov 'after-string
-			   (propertize old-text
-				       'face 'org-change-deleted-face)))))
-	 ;; Addition or replacement: show new text
-	 (t
-	  ;; Hide {! before new text
-	  (org-change--make-overlay open-beg open-end 'invisible t)
-	  ;; Face on new text
-	  (org-change--make-overlay new-beg new-end
-				    'face 'org-change-link-face)
-	  ;; Hide !}{!old!} and optional {!comment!}
-	  (org-change--make-overlay mid-beg full-end 'invisible t)
-	  (when (and org-change-show-deleted (not (equal old-text "")))
-	    ;; Show old text after the change
-	    (let ((ov (make-overlay full-end full-end nil t nil)))
-	      (overlay-put ov 'org-change-overlay t)
-	      (overlay-put ov 'evaporate t)
-	      (overlay-put ov 'after-string
-			   (propertize old-text
-				       'face 'org-change-deleted-face))))))
-	(goto-char full-end))))
-  (message "Fontifying changes (100%%)"))
+  (let ((quiet (or rbeg rend)))
+    (setq rbeg (or rbeg (point-min))
+	  rend (or rend (point-max)))
+    (org-change--remove-overlays rbeg rend)
+    (save-excursion
+      (goto-char rbeg)
+      (while (re-search-forward org-change--regexp rend t)
+	(let* ((full-beg (match-beginning 0))
+	       (full-end (match-end 0))
+	       (new-text (match-string 1))
+	       (old-text (match-string 2))
+	       (new-beg (match-beginning 1))
+	       (new-end (match-end 1))
+	       (open-beg full-beg)        ; {!
+	       (open-end (+ full-beg 2))  ; after {!
+	       (mid-beg new-end))         ; start of !}{!old!}...
+	  (unless quiet
+	    (message "Fontifying changes (%d%%)"
+		     (* 100 (/ (float full-end) (point-max)))))
+	  (cond
+	   ;; Empty change: neither new nor old text.  Show the same
+	   ;; placeholder `org-change-add' starts out with, so that typing
+	   ;; resumes the addition.  `org-change--cleanup-empty' removes
+	   ;; the markup once point leaves it.
+	   ((and (equal new-text "") (equal old-text ""))
+	    (org-change--make-overlay full-beg full-end
+				      'display " "
+				      'face 'org-change-link-face))
+	   ;; Deletion: new text is empty
+	   ((equal new-text "")
+	    ;; Hide everything, show deleted marker
+	    (org-change--make-overlay full-beg full-end
+				      'display org-change-deleted-marker
+				      'face 'org-change-link-face)
+	    (when org-change-show-deleted
+	      ;; Also show old text after the marker
+	      (let ((ov (make-overlay full-end full-end nil t nil)))
+		(overlay-put ov 'org-change-overlay t)
+		(overlay-put ov 'evaporate t)
+		(overlay-put ov 'after-string
+			     (propertize old-text
+					 'face 'org-change-deleted-face)))))
+	   ;; Addition or replacement: show new text
+	   (t
+	    ;; Hide {! before new text
+	    (org-change--make-overlay open-beg open-end 'invisible t)
+	    ;; Face on new text
+	    (org-change--make-overlay new-beg new-end
+				      'face 'org-change-link-face)
+	    ;; Hide !}{!old!} and optional {!comment!}
+	    (org-change--make-overlay mid-beg full-end 'invisible t)
+	    (when (and org-change-show-deleted (not (equal old-text "")))
+	      ;; Show old text after the change
+	      (let ((ov (make-overlay full-end full-end nil t nil)))
+		(overlay-put ov 'org-change-overlay t)
+		(overlay-put ov 'evaporate t)
+		(overlay-put ov 'after-string
+			     (propertize old-text
+					 'face 'org-change-deleted-face))))))
+	  (goto-char full-end))))
+    (unless quiet
+      (message "Fontifying changes (100%%)"))))
 
 (defun org-change--after-change (beg end _len)
   "Re-fontify around changes after buffer modification.

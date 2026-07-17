@@ -32,6 +32,15 @@ the buffer."
   (goto-char end)
   (activate-mark))
 
+(defun org-change-tests--messages-while (thunk)
+  "Return the list of messages `message' emits while THUNK runs."
+  (let ((collected '()))
+    (cl-letf (((symbol-function 'message)
+	       (lambda (format-string &rest args)
+		 (push (apply #'format format-string args) collected))))
+      (funcall thunk))
+    (nreverse collected)))
+
 ;;; Fontification of the empty change {!!}{!!}
 
 (ert-deftest org-change-test-empty-change-is-not-shown-as-deletion ()
@@ -150,6 +159,41 @@ It must not display `org-change-deleted-marker'."
     (org-change-replace)
     (org-change-tests--type ?x)
     (should (equal (buffer-string) "{!x!}{!old!}"))))
+
+;;; Progress reporting
+
+(ert-deftest org-change-test-typing-reports-no-progress ()
+  "Refontifying after a keystroke must not talk to the echo area."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-max))
+    (should-not (org-change-tests--messages-while
+		 (lambda () (org-change-tests--type ?x))))))
+
+(ert-deftest org-change-test-cleanup-reports-no-progress ()
+  "Sweeping an empty change must not talk to the echo area either."
+  (with-temp-buffer
+    (insert "a {!!}{!!} b")
+    (org-change-mode 1)
+    (goto-char (point-max))
+    (should-not (org-change-tests--messages-while
+		 #'org-change--cleanup-empty))))
+
+(ert-deftest org-change-test-marking-a-change-reports-no-progress ()
+  "Creating a change fontifies only the new markup: nothing to report."
+  (with-temp-buffer
+    (insert "text")
+    (org-change-mode 1)
+    (goto-char (point-max))
+    (should-not (org-change-tests--messages-while #'org-change-add))))
+
+(ert-deftest org-change-test-fontifying-whole-buffer-reports-progress ()
+  "Fontifying the buffer on request still reports progress."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (should (org-change-tests--messages-while #'org-change-fontify))))
 
 ;;; Export
 
