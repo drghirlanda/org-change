@@ -118,14 +118,21 @@ The deleted/replaced text is shown in the face
 
 (defvar org-change-mode)  ; defined by define-minor-mode below
 
-(defvar org-change--extra-space-flag nil
-  "Non-nil when a space has been inserted as a typing placeholder.")
+(defvar org-change--extra-space-pos nil
+  "Marker at the space inserted as a typing placeholder, or nil.")
 
 ;; Regexp to match change markup: {!new!}{!old!} with optional {!comment!}
 ;; Group 1 = new text, Group 2 = old text, Group 3 = comment (optional)
 (defvar org-change--regexp
   "{!\\(\\(?:.\\|\n\\)*?\\)!}{!\\(\\(?:.\\|\n\\)*?\\)!}\\(?:{!\\(\\(?:.\\|\n\\)*?\\)!}\\)?"
   "Regexp to match change markup.")
+
+(defvar org-change--comment-regexp
+  "{!\\(\\(?:.\\|\n\\)*?\\)!}"
+  "Regexp to match the comment part of change markup.")
+
+(defconst org-change--empty-markup "{!!}{!!}"
+  "Markup of a change with neither new nor old text.")
 
 (defun org-change--get-region ()
   "Return content of active region or nil."
@@ -174,6 +181,14 @@ RBEG is set to buffer beginning and REND to buffer end."
 	(message "Fontifying changes (%d%%)"
 		 (* 100 (/ (float full-end) (point-max))))
 	(cond
+	 ;; Empty change: neither new nor old text.  Show the same
+	 ;; placeholder `org-change-add' starts out with, so that typing
+	 ;; resumes the addition.  `org-change--cleanup-empty' removes
+	 ;; the markup once point leaves it.
+	 ((and (equal new-text "") (equal old-text ""))
+	  (org-change--make-overlay full-beg full-end
+				    'display " "
+				    'face 'org-change-link-face))
 	 ;; Deletion: new text is empty
 	 ((equal new-text "")
 	  ;; Hide everything, show deleted marker
@@ -242,7 +257,7 @@ type the new text."
 	(org-change-fontify beg (point))
 	;; place point inside the new text, on the space
 	(goto-char (+ beg 2))
-	(setq org-change--extra-space-flag t)))))
+	(org-change--mark-extra-space)))))
 
 (defun org-change-delete ()
   "Mark active region as deleted text."
@@ -283,13 +298,64 @@ If there is no active region, insert an empty addition for typing."
       (when (equal new-text " ")
 	;; place point on the space for typing
 	(goto-char (+ beg 2))
-	(setq org-change--extra-space-flag t)))))
+	(org-change--mark-extra-space)))))
+
+(defun org-change--mark-extra-space ()
+  "Record the space at point as a typing placeholder."
+  (setq org-change--extra-space-pos (copy-marker (point))))
 
 (defun org-change--erase-extra-space ()
-  "Remove space added by replace or add."
-  (when (and org-change-mode org-change--extra-space-flag)
-    (delete-char 1)
-    (setq org-change--extra-space-flag nil)))
+  "Remove the space added by `org-change-add' or `org-change-replace'.
+The space is removed only if the character just typed landed on
+it.  Typing anywhere else means the placeholder was abandoned, and
+the space must be left where it is: deleting a character at point
+would eat text the user meant to keep."
+  (when (and org-change-mode
+	     org-change--extra-space-pos
+	     (eq (marker-buffer org-change--extra-space-pos) (current-buffer)))
+    (when (and (= (point) (1+ (marker-position org-change--extra-space-pos)))
+	       (eq (char-after) ?\s))
+      (delete-char 1))
+    (org-change--forget-extra-space)))
+
+(defun org-change--forget-extra-space ()
+  "Forget the typing placeholder, if any."
+  (when org-change--extra-space-pos
+    (set-marker org-change--extra-space-pos nil)
+    (setq org-change--extra-space-pos nil)))
+
+;;; Cleanup of empty changes
+
+(defun org-change--empty-markup-end (pos)
+  "Return the end of the empty change starting at POS, or nil to keep it.
+POS is the start of `org-change--empty-markup'.  The end covers a
+trailing empty comment, if any.  A change carrying a comment with
+text is kept: deleting it would destroy what the user wrote."
+  (save-excursion
+    (goto-char (+ pos (length org-change--empty-markup)))
+    (if (looking-at org-change--comment-regexp)
+	(and (equal (match-string 1) "") (match-end 0))
+      (point))))
+
+(defun org-change--cleanup-empty ()
+  "Delete the empty changes that point is not inside.
+An empty change, `{!!}{!!}', says nothing: it is what
+`org-change-add' leaves behind when its new text is erased again.
+It is kept while point is inside it, so typing resumes the
+addition, and deleted as soon as point leaves."
+  (when org-change-mode
+    (let ((pos (point-marker)))
+      (save-excursion
+	(goto-char (point-min))
+	(while (search-forward org-change--empty-markup nil t)
+	  (let* ((beg (match-beginning 0))
+		 (end (org-change--empty-markup-end beg)))
+	    (when (and end
+		       (not (and (> (marker-position pos) beg)
+				 (< (marker-position pos) end))))
+	      (org-change--remove-overlays beg end)
+	      (delete-region beg end)))))
+      (set-marker pos nil))))
 
 ;;; Accept/reject functions
 
@@ -492,8 +558,13 @@ safe and do not affect the original buffer."
 	   (old-text (match-string 2))
 	   (comment (or (match-string 3) ""))
 	   (replacement
-	    (if org-change-final
-		(if (equal new-text "") "" new-text)
+	    (cond
+	     ;; An empty change has nothing to export
+	     ((and (equal new-text "") (equal old-text "") (equal comment ""))
+	      "")
+	     (org-change-final
+	      (if (equal new-text "") "" new-text))
+	     (t
 	      (let ((exporter (alist-get
 			       backend
 			       org-change--exporters
@@ -502,7 +573,7 @@ safe and do not affect the original buffer."
 		(if exporter
 		    (funcall exporter old-text new-text comment)
 		  (user-error "Change markup not supported in %s export"
-			      backend))))))
+			      backend)))))))
       (replace-match replacement t t))))
 
 (defun org-change-filter-final-output (text backend _)
@@ -555,11 +626,14 @@ TEXT is the whole document and BACKEND is checked for being
       (progn
 	(add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
 	(add-hook 'after-change-functions #'org-change--after-change nil t)
+	(add-hook 'post-command-hook #'org-change--cleanup-empty nil t)
 	(org-change--setup-export)
-	(setq-local org-change--extra-space-flag nil)
+	(setq-local org-change--extra-space-pos nil)
 	(org-change-fontify))
     (remove-hook 'post-self-insert-hook #'org-change--erase-extra-space t)
     (remove-hook 'after-change-functions #'org-change--after-change t)
+    (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
+    (org-change--forget-extra-space)
     (org-change--remove-overlays)))
 
 (provide 'org-change)
