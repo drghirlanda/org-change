@@ -24,14 +24,6 @@ the buffer."
   (let ((last-command-event char))
     (self-insert-command 1 char)))
 
-(defun org-change-tests--mark-region (beg end)
-  "Make BEG to END an active region that `use-region-p' recognizes."
-  (setq-local transient-mark-mode t)
-  (goto-char beg)
-  (set-mark beg)
-  (goto-char end)
-  (activate-mark))
-
 (defun org-change-tests--messages-while (thunk)
   "Return the list of messages `message' emits while THUNK runs."
   (let ((collected '()))
@@ -40,6 +32,14 @@ the buffer."
 		 (push (apply #'format format-string args) collected))))
       (funcall thunk))
     (nreverse collected)))
+
+(defun org-change-tests--mark-region (beg end)
+  "Make BEG to END an active region that `use-region-p' recognizes."
+  (setq-local transient-mark-mode t)
+  (goto-char beg)
+  (set-mark beg)
+  (goto-char end)
+  (activate-mark))
 
 ;;; Fontification of the empty change {!!}{!!}
 
@@ -210,6 +210,77 @@ It must not display `org-change-deleted-marker'."
     (insert "a {!!}{!gone!} b")
     (org-change--before-processing 'latex)
     (should (equal (buffer-string) "a @@latex:\\deleted{gone}@@ b"))))
+
+;;; Adjacent changes (comment/pair ambiguity)
+
+(ert-deftest org-change-test-adjacent-changes-are-two-changes ()
+  "Two changes that touch must not merge: the second must not be read
+as a comment of the first."
+  (with-temp-buffer
+    (insert "{!new1!}{!old1!}{!new2!}{!old2!}")
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string)
+		   (concat "@@latex:\\replaced{new1}{old1}@@"
+			   "@@latex:\\replaced{new2}{old2}@@")))))
+
+(ert-deftest org-change-test-at-change-picks-the-second-of-two-adjacent ()
+  "Point in the second of two adjacent changes finds only that change."
+  (with-temp-buffer
+    (insert "{!new1!}{!old1!}{!new2!}{!old2!}")
+    (org-change-mode 1)
+    (goto-char 20)			; inside new2
+    (let ((span (org-change--at-change)))
+      (should span)
+      (should (equal (buffer-substring-no-properties (car span) (cdr span))
+		     "{!new2!}{!old2!}")))))
+
+(ert-deftest org-change-test-reject-second-of-two-adjacent-changes ()
+  "Rejecting the second of two adjacent changes leaves the first intact."
+  (with-temp-buffer
+    (insert "{!new1!}{!old1!}{!new2!}{!old2!}")
+    (org-change-mode 1)
+    (goto-char 20)			; inside new2
+    (org-change-reject)
+    (should (equal (buffer-string) "{!new1!}{!old1!}old2"))))
+
+(ert-deftest org-change-test-reject-first-of-two-adjacent-changes ()
+  "Rejecting the first of two adjacent changes leaves the second intact."
+  (with-temp-buffer
+    (insert "{!new1!}{!old1!}{!new2!}{!old2!}")
+    (org-change-mode 1)
+    (goto-char 4)			; inside new1
+    (org-change-reject)
+    (should (equal (buffer-string) "old1{!new2!}{!old2!}"))))
+
+(ert-deftest org-change-test-accepting-a-deletion-then-rejecting-neighbor ()
+  "The reported scenario: accepting a deletion abuts its neighbours,
+and rejecting one of them must still touch only that one."
+  (with-temp-buffer
+    (insert "{!A!}{!B!}{!!}{!gone!}{!C!}{!D!}")
+    (org-change-mode 1)
+    (goto-char 12)			; inside the deletion
+    (org-change-accept)			; removes it -> the pairs now abut
+    (should (equal (buffer-string) "{!A!}{!B!}{!C!}{!D!}"))
+    (goto-char 4)			; inside the first change
+    (org-change-reject)
+    (should (equal (buffer-string) "B{!C!}{!D!}"))))
+
+(ert-deftest org-change-test-comment-still-captured-at-end ()
+  "A trailing comment on a lone change is still captured."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}{!cmt!}")
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string)
+		   "@@latex:\\replaced[comment=cmt]{new}{old}@@"))))
+
+(ert-deftest org-change-test-comment-then-spaced-change-both-captured ()
+  "A comment followed by whitespace and another change stays a comment."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}{!cmt!} {!new2!}{!old2!}")
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string)
+		   (concat "@@latex:\\replaced[comment=cmt]{new}{old}@@"
+			   " @@latex:\\replaced{new2}{old2}@@")))))
 
 (provide 'org-change-tests)
 

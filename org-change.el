@@ -127,12 +127,40 @@ The deleted/replaced text is shown in the face
   "{!\\(\\(?:.\\|\n\\)*?\\)!}{!\\(\\(?:.\\|\n\\)*?\\)!}\\(?:{!\\(\\(?:.\\|\n\\)*?\\)!}\\)?"
   "Regexp to match change markup.")
 
+(defvar org-change--pair-regexp
+  "{!\\(\\(?:.\\|\n\\)*?\\)!}{!\\(\\(?:.\\|\n\\)*?\\)!}"
+  "Regexp to match change markup without its optional comment.")
+
 (defvar org-change--comment-regexp
   "{!\\(\\(?:.\\|\n\\)*?\\)!}"
   "Regexp to match the comment part of change markup.")
 
 (defconst org-change--empty-markup "{!!}{!!}"
   "Markup of a change with neither new nor old text.")
+
+(defun org-change--search-forward (&optional bound noerror)
+  "Search forward for the next change, like `re-search-forward'.
+Match data is set as for `org-change--regexp'.
+
+Resolves the ambiguity between a comment and a directly following
+change.  Change markup is a pair `{!new!}{!old!}', so the third
+`{!...!}' group in `{!a!}{!b!}{!c!}' could be either a comment of
+the first pair or the start of a second pair.  A lone trailing
+group is a comment; a group that is itself followed by another
+`{!...!}' group belongs to the next change.  Without this,
+`{!a!}{!b!}{!c!}{!d!}' would be misread as one change whose
+comment is `c', swallowing the `{!c!}{!d!}' change and leaving a
+stray `{!d!}'."
+  (when (re-search-forward org-change--regexp bound noerror)
+    (when (and (match-beginning 3)
+	       (save-excursion
+		 (goto-char (match-end 0))
+		 (looking-at-p org-change--comment-regexp)))
+      ;; The captured comment is really the next change's new text.
+      ;; Re-match the pair alone, so the comment stays with its change.
+      (goto-char (match-beginning 0))
+      (re-search-forward org-change--pair-regexp bound noerror))
+    t))
 
 (defun org-change--get-region ()
   "Return content of active region or nil."
@@ -174,7 +202,7 @@ echo area is needed for other things."
     (org-change--remove-overlays rbeg rend)
     (save-excursion
       (goto-char rbeg)
-      (while (re-search-forward org-change--regexp rend t)
+      (while (org-change--search-forward rend t)
 	(let* ((full-beg (match-beginning 0))
 	       (full-end (match-end 0))
 	       (new-text (match-string 1))
@@ -376,7 +404,7 @@ Also sets match data for `org-change--regexp'."
       ;; Search backward then forward to find a change containing point
       (goto-char limit)
       (catch 'found
-	(while (re-search-forward org-change--regexp nil t)
+	(while (org-change--search-forward nil t)
 	  (when (and (<= (match-beginning 0) pos)
 		     (>= (match-end 0) pos))
 	    (throw 'found (cons (match-beginning 0) (match-end 0))))
@@ -405,7 +433,7 @@ the active region."
 	(save-excursion
 	  (save-restriction
 	    (goto-char (region-beginning))
-	    (while (re-search-forward org-change--regexp nil t)
+	    (while (org-change--search-forward nil t)
 	      (let ((beg (match-beginning 0)))
 		(goto-char beg)
 		(org-change--accept-or-reject accept)
@@ -434,7 +462,7 @@ otherwise process the whole buffer."
 	      end (use-region-end))
 	(set-mark end))
       (goto-char beg)
-      (while (re-search-forward org-change--regexp end t)
+      (while (org-change--search-forward end t)
 	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
 	  (cond
 	   ((char-equal answer ?y)
@@ -561,7 +589,7 @@ This runs on a temporary copy of the buffer via
 `org-export-before-processing-functions', so modifications are
 safe and do not affect the original buffer."
   (goto-char (point-min))
-  (while (re-search-forward org-change--regexp nil t)
+  (while (org-change--search-forward nil t)
     (let* ((new-text (match-string 1))
 	   (old-text (match-string 2))
 	   (comment (or (match-string 3) ""))
