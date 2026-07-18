@@ -741,6 +741,35 @@ data `replace-match' needs."
 			 "<span class=\"org-change-deleted org-change-author-SG\">old</span>"
 			 "@@"))))
 
+;;; Counting changes
+
+(ert-deftest org-change-test-counts ()
+  "Changes are counted by kind, ignoring the empty change."
+  (with-temp-buffer
+    (insert "{!a!}{!!} x {!!}{!b!} y {!c!}{!d!} z {!e!}{!!} {!!}{!!}")
+    (should (equal (org-change--counts) '(2 1 1)))))
+
+(ert-deftest org-change-test-info-message ()
+  "`org-change-info' reports the counts in the minibuffer."
+  (with-temp-buffer
+    (insert "{!a!}{!!} {!!}{!b!} {!c!}{!d!}")
+    (should (member "1 addition, 1 deletion, 1 replacement"
+		    (org-change-tests--messages-while #'org-change-info)))))
+
+(ert-deftest org-change-test-info-plurals ()
+  "The message pluralizes each count."
+  (with-temp-buffer
+    (insert "{!a!}{!!} {!e!}{!!}")
+    (should (member "2 additions, 0 deletions, 0 replacements"
+		    (org-change-tests--messages-while #'org-change-info)))))
+
+(ert-deftest org-change-test-info-no-changes ()
+  "With no changes, `org-change-info' says so."
+  (with-temp-buffer
+    (insert "just plain text")
+    (should (member "No changes"
+		    (org-change-tests--messages-while #'org-change-info)))))
+
 ;;; Change tree (sparse tree of changes)
 
 (defun org-change-tests--pos (s)

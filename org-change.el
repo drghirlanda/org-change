@@ -31,7 +31,8 @@
 ;; on a change with org-change-comment (C-` c).  Move between changes
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Show a sparse tree of all
-;; changes with org-change-tree (C-` \).  Generate change markup from
+;; changes with org-change-tree (C-` \).  Count them with
+;; org-change-info (C-` i).  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
@@ -141,6 +142,11 @@ export."
 
 (defcustom org-change-tree-key (kbd "C-` \\")
   "Keybinding for `org-change-tree'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-info-key (kbd "C-` i")
+  "Keybinding for `org-change-info'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -796,6 +802,35 @@ edited while the change tree is shown."
     (let ((last-command nil))
       (recenter-top-bottom))))
 
+;;; Counting changes
+
+(defun org-change--counts ()
+  "Return the list (ADDITIONS DELETIONS REPLACEMENTS) for the buffer.
+The empty change `{!!}{!!}' is not counted."
+  (let ((add 0) (del 0) (rep 0))
+    (save-excursion
+      (goto-char (point-min))
+      (while (org-change--search-forward nil t)
+	(let ((new (match-string 1))
+	      (old (match-string 2)))
+	  (cond
+	   ((and (equal new "") (equal old "")))	; empty change: skip
+	   ((equal old "") (setq add (1+ add)))		; addition
+	   ((equal new "") (setq del (1+ del)))		; deletion
+	   (t (setq rep (1+ rep)))))))			; replacement
+    (list add del rep)))
+
+(defun org-change-info ()
+  "Show the number of additions, deletions, and replacements."
+  (interactive)
+  (pcase-let ((`(,add ,del ,rep) (org-change--counts)))
+    (if (zerop (+ add del rep))
+	(message "No changes")
+      (message "%d addition%s, %d deletion%s, %d replacement%s"
+	       add (if (= add 1) "" "s")
+	       del (if (= del 1) "" "s")
+	       rep (if (= rep 1) "" "s")))))
+
 (defun org-change-toggle-deleted-text ()
   "Show/hide deleted text."
   (interactive)
@@ -1193,6 +1228,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-next-key #'org-change-next-change)
             (define-key map org-change-previous-key #'org-change-previous-change)
             (define-key map org-change-tree-key #'org-change-tree)
+            (define-key map org-change-info-key #'org-change-info)
             map)
   (if org-change-mode
       (progn

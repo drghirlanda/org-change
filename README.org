@@ -81,6 +81,10 @@ Point lands at the beginning of the change. If point is inside a change, these m
 
 To review all the changes in a document at once, press ~C-` \~ (backslash), analogous to Org's own sparse-tree key. This collapses the buffer to a sparse tree showing only the changes and the headlines above them, hiding everything else. Move between changes with ~C-` n~ and ~C-` p~ as usual. As soon as you edit the buffer the tree is dismissed: your previous view is restored and the change you edit is revealed and centered, so you drop straight back into normal editing. Because it uses Org's folding, this works in org-mode only.
 
+** Counting changes
+
+Press ~C-` i~ to show, in the minibuffer, how many additions, deletions, and replacements the document contains, for example "3 additions, 2 deletions, 1 replacement".
+
 ** Commenting on a change
 
 Press ~C-` c~ on a change to add or edit its comment. You are prompted for the text, pre-filled with the existing comment if there is one; entering an empty comment removes it. The comment is stored in the change's third group and shown in italic just after the change. If the change has an author (see [[Authors]]), it is shown as =author: comment= (for example =SG: needs a citation=), so you can tell who commented without having to remember which color is whose. A change that has an author but no comment shows just the author id.
