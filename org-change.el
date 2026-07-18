@@ -32,7 +32,8 @@
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Show a sparse tree of all
 ;; changes with org-change-tree (C-` \).  Count them with
-;; org-change-info (C-` i).  Generate change markup from
+;; org-change-info (C-` i).  Press C-` h for a summary of the key
+;; bindings.  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
@@ -147,6 +148,11 @@ export."
 
 (defcustom org-change-info-key (kbd "C-` i")
   "Keybinding for `org-change-info'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-help-key (kbd "C-` h")
+  "Keybinding for `org-change-help'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -802,6 +808,43 @@ edited while the change tree is shown."
     (let ((last-command nil))
       (recenter-top-bottom))))
 
+;;; Help
+
+(defvar org-change--help-table
+  '((org-change-add-key . "Mark the region as an addition (or start typing new text)")
+    (org-change-delete-key . "Mark the region as a deletion")
+    (org-change-replace-key . "Replace the region with new text")
+    (org-change-kill-key . "Kill (cut) the region as a deletion")
+    (org-change-yank-key . "Yank (paste) as an addition")
+    (org-change-accept-key . "Accept the change at point")
+    (org-change-reject-key . "Reject the change at point")
+    (org-change-accept-reject-all-key . "Accept or reject every change, one by one")
+    (org-change-comment-key . "Add or edit the change's comment")
+    (org-change-next-key . "Go to the next change")
+    (org-change-previous-key . "Go to the previous change")
+    (org-change-tree-key . "Show a sparse tree of all changes")
+    (org-change-info-key . "Report the number of additions, deletions, replacements")
+    (org-change-fontify-key . "Re-fontify the buffer")
+    (org-change-help-key . "Show this help"))
+  "Rows of (KEY-VARIABLE . DESCRIPTION) for `org-change-help'.")
+
+(defun org-change--help-string ()
+  "Return the current key bindings and their descriptions as text."
+  (mapconcat
+   (lambda (row)
+     (format "  %-8s  %s"
+	     (key-description (symbol-value (car row)))
+	     (cdr row)))
+   org-change--help-table "\n"))
+
+(defun org-change-help ()
+  "Display the Org Change key bindings, with a description of each."
+  (interactive)
+  (with-help-window "*Org Change Help*"
+    (princ "Org Change key bindings:\n\n")
+    (princ (org-change--help-string))
+    (princ "\n")))
+
 ;;; Counting changes
 
 (defun org-change--counts ()
@@ -1229,6 +1272,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-previous-key #'org-change-previous-change)
             (define-key map org-change-tree-key #'org-change-tree)
             (define-key map org-change-info-key #'org-change-info)
+            (define-key map org-change-help-key #'org-change-help)
             map)
   (if org-change-mode
       (progn

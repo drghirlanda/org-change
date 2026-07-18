@@ -741,6 +741,34 @@ data `replace-match' needs."
 			 "<span class=\"org-change-deleted org-change-author-SG\">old</span>"
 			 "@@"))))
 
+;;; Help
+
+(ert-deftest org-change-test-help-string ()
+  "The help lists the current keys with a description each."
+  (let ((s (org-change--help-string)))
+    (should (string-match-p "C-` a" s))
+    (should (string-match-p "addition" s))
+    (should (string-match-p "C-` i" s))
+    (should (string-match-p "C-` h" s))
+    ;; a description, not the function name
+    (should-not (string-match-p "org-change-add\\b" s))))
+
+(ert-deftest org-change-test-help-follows-custom-keys ()
+  "The help reflects a customized key binding."
+  (let ((org-change-add-key (kbd "C-c q")))
+    (should (string-match-p "C-c q" (org-change--help-string)))))
+
+(ert-deftest org-change-test-help-pops-up-a-buffer ()
+  "`org-change-help' displays a help buffer with the bindings."
+  (with-temp-buffer
+    (org-change-mode 1)
+    (save-window-excursion
+      (org-change-help))
+    (should (get-buffer "*Org Change Help*"))
+    (with-current-buffer "*Org Change Help*"
+      (should (string-match-p "Reject" (buffer-string))))
+    (kill-buffer "*Org Change Help*")))
+
 ;;; Counting changes
 
 (ert-deftest org-change-test-counts ()

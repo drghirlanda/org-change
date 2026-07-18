@@ -62,7 +62,7 @@ Two things to keep in mind:
 
 * Change manipulation
 
-org-change provides key sequences to easily manipulate change markup. All key sequences start with ~C-`~ (control + left quote). Not the prettiest, but few control prefixes are free. It's the curse of keymensionality. To change it, see section [[Customization]].
+org-change provides key sequences to easily manipulate change markup. All key sequences start with ~C-`~ (control + left quote). Not the prettiest, but few control prefixes are free. It's the curse of keymensionality. To change it, see section [[Customization]]. Press ~C-` h~ at any time for a summary of the key bindings, each with a short description.
 
 The key sequences are:
 - ~C-` a~ :: for additions.
