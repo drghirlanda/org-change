@@ -542,6 +542,24 @@ and rejecting restores it."
     (should (= (point) 3))
     (should-not org-change--fold-restore)))
 
+;;; Re-fontifying after edits inside multi-line changes
+
+(ert-deftest org-change-test-editing-inside-multiline-change-keeps-markup-hidden ()
+  "Editing a later line of a change that spans blank lines must not
+strip the change's overlays: the closing markup stays hidden."
+  (with-temp-buffer
+    (insert "before {!para one\n\npara two!}{!!} after")
+    (org-change-mode 1)
+    ;; type a character on the change's last line
+    (goto-char (point-min))
+    (re-search-forward "para two")
+    (goto-char (match-beginning 0))
+    (insert "X")				; fires `org-change--after-change'
+    ;; the closing !}{!!} must still be hidden by an org-change overlay
+    (goto-char (point-min))
+    (re-search-forward "!}{!!}")
+    (should (get-char-property (match-beginning 0) 'invisible))))
+
 ;;; Multi-author support
 
 (ert-deftest org-change-test-split-comment ()

@@ -297,6 +297,11 @@ echo area is needed for other things."
 	  (unless quiet
 	    (message "Fontifying changes (%d%%)"
 		     (* 100 (/ (float full-end) (point-max)))))
+	  ;; Mark the whole change, so `org-change--after-change' can
+	  ;; grow its region to cover a change spanning several lines
+	  ;; when only one of them is edited.
+	  (org-change--make-overlay full-beg full-end
+				    'org-change-extent t)
 	  (cond
 	   ;; Empty change: neither new nor old text.  Show the same
 	   ;; placeholder `org-change-add' starts out with, so that typing
@@ -343,11 +348,18 @@ echo area is needed for other things."
 
 (defun org-change--after-change (beg end _len)
   "Re-fontify around changes after buffer modification.
-BEG and END are the modified region boundaries."
+BEG and END are the modified region boundaries.  The region is
+grown to whole lines, and then to the full extent of any change
+overlapping it, so editing one line of a change that spans several
+lines re-fontifies the whole change rather than truncating it."
   (when org-change-mode
     (save-excursion
       (let ((rbeg (progn (goto-char beg) (line-beginning-position)))
 	    (rend (progn (goto-char end) (line-end-position))))
+	(dolist (ov (overlays-in rbeg rend))
+	  (when (overlay-get ov 'org-change-extent)
+	    (setq rbeg (min rbeg (overlay-start ov))
+		  rend (max rend (overlay-end ov)))))
 	(org-change-fontify rbeg rend)))))
 
 ;;; Change creation functions
