@@ -542,6 +542,85 @@ and rejecting restores it."
     (should (= (point) 3))
     (should-not org-change--fold-restore)))
 
+;;; Multi-author support
+
+(ert-deftest org-change-test-split-comment ()
+  "The @id prefix is parsed out of a comment as its author."
+  (should (equal (org-change--split-comment "@SG") '("SG" . "")))
+  (should (equal (org-change--split-comment "@SG needs a citation")
+		 '("SG" . "needs a citation")))
+  (should (equal (org-change--split-comment "just a note")
+		 '(nil . "just a note")))
+  (should (equal (org-change--split-comment "") '(nil . ""))))
+
+(ert-deftest org-change-test-creation-stamps-the-author ()
+  "Creating a change while `org-change-author' is set records it."
+  (let ((org-change-author "SG"))
+    (with-temp-buffer
+      (insert "gone")
+      (org-change-mode 1)
+      (org-change-tests--mark-region (point-min) (point-max))
+      (org-change-delete)
+      (should (equal (buffer-string) "{!!}{!gone!}{!@SG!}")))))
+
+(ert-deftest org-change-test-creation-without-author-adds-no-comment ()
+  "With no current author, changes carry no author comment."
+  (let ((org-change-author nil))
+    (with-temp-buffer
+      (insert "gone")
+      (org-change-mode 1)
+      (org-change-tests--mark-region (point-min) (point-max))
+      (org-change-delete)
+      (should (equal (buffer-string) "{!!}{!gone!}")))))
+
+(ert-deftest org-change-test-change-face-uses-author-color ()
+  "The change face tints the text in the author's color."
+  (let ((org-change-authors '(("SG" :name "Stefano" :color "blue"))))
+    (should (equal (org-change--change-face "SG")
+		   (list :inherit org-change-face :foreground "blue")))
+    (should (eq (org-change--change-face "unknown") org-change-face))
+    (should (eq (org-change--change-face nil) org-change-face))))
+
+(ert-deftest org-change-test-latex-export-with-author ()
+  "LaTeX export maps the author to the changes package id."
+  (should (equal (org-change--export-latex "old" "new" "@SG")
+		 "@@latex:\\replaced[id=SG]{new}{old}@@"))
+  (should (equal (org-change--export-latex "" "new" "@SG")
+		 "@@latex:\\added[id=SG]{new}@@"))
+  (should (equal (org-change--export-latex "old" "new" "@SG my note")
+		 "@@latex:\\replaced[id=SG, comment=my note]{new}{old}@@")))
+
+(ert-deftest org-change-test-latex-export-comment-only-unchanged ()
+  "A plain comment still exports as before, with no id."
+  (should (equal (org-change--export-latex "old" "new" "cmt")
+		 "@@latex:\\replaced[comment=cmt]{new}{old}@@")))
+
+(ert-deftest org-change-test-latex-author-definitions ()
+  "Registered authors become changes package definitions."
+  (let ((org-change-authors '(("SG" :name "Stefano" :color "blue")
+			      ("AB" :name "Alex" :color "red"))))
+    (should (equal (org-change--latex-author-defs)
+		   (concat "\\definechangesauthor[name={Stefano}, color={blue}]{SG}\n"
+			   "\\definechangesauthor[name={Alex}, color={red}]{AB}\n")))))
+
+(ert-deftest org-change-test-before-processing-with-author ()
+  "Exporting an authored change through the buffer works end to end.
+Guards against the exporter's `string-match' clobbering the match
+data `replace-match' needs."
+  (with-temp-buffer
+    (insert "x {!new!}{!old!}{!@SG!} y")
+    (org-change--before-processing 'latex)
+    (should (equal (buffer-string)
+		   "x @@latex:\\replaced[id=SG]{new}{old}@@ y"))))
+
+(ert-deftest org-change-test-html-export-with-author ()
+  "HTML export tags the spans with the author class."
+  (should (equal (org-change--export-html "old" "new" "@SG")
+		 (concat "@@html:"
+			 "<span class=\"org-change-added org-change-author-SG\">new</span>"
+			 "<span class=\"org-change-deleted org-change-author-SG\">old</span>"
+			 "@@"))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

@@ -57,6 +57,26 @@ The deleted/replaced text is shown in the face
   :type 'string
   :group 'org-change)
 
+(defcustom org-change-author nil
+  "Identifier of the current author, or nil.
+When non-nil, changes you create are attributed to this author: it
+is stored as an @-prefixed token in the change's comment.  Look up
+the author's name and color in `org-change-authors'."
+  :type '(choice (const :tag "No author" nil) string)
+  :group 'org-change)
+
+(defcustom org-change-authors nil
+  "Registry of change authors.
+Each entry is (ID :name NAME :color COLOR), where ID is the short
+identifier stored in changes (see `org-change-author'), NAME is a
+readable name, and COLOR names a color known to both Emacs and, for
+LaTeX export, the xcolor package (for example \"blue\" or \"red\").
+The color tints the author's changes in the buffer and is used on
+export."
+  :type '(alist :key-type string
+		:value-type (plist :options ((:name string) (:color string))))
+  :group 'org-change)
+
 (defcustom org-change-add-key (kbd "C-` a")
   "Keybinding for `org-change-add'."
   :type 'key-sequence
@@ -191,6 +211,36 @@ change survives unchanged.  `org-change--decode' reverses this."
   (string-replace "{\\!" "{!"
 		  (string-replace "!\\}" "!}" text)))
 
+;;; Authors
+
+(defun org-change--split-comment (comment)
+  "Split COMMENT into a (AUTHOR . TEXT) cons.
+A leading @ID token names the author of the change; the rest,
+trimmed, is the comment text.  With no @ID token AUTHOR is nil and
+TEXT is COMMENT unchanged."
+  (if (string-match
+       "\\`@\\([[:alnum:]_-]+\\)\\(?:[ \t]+\\(\\(?:.\\|\n\\)*\\)\\)?\\'"
+       comment)
+      (cons (match-string 1 comment) (or (match-string 2 comment) ""))
+    (cons nil comment)))
+
+(defun org-change--author-markup ()
+  "Return comment markup stamping the current author, or an empty string.
+Empty when `org-change-author' is nil or blank."
+  (if (and org-change-author (not (string-empty-p org-change-author)))
+      (format "{!@%s!}" (org-change--encode org-change-author))
+    ""))
+
+(defun org-change--change-face (author)
+  "Return the face for a change made by AUTHOR (a string or nil).
+When AUTHOR has a color in `org-change-authors', tint the text with
+it; otherwise use `org-change-face'."
+  (let ((color (and author
+		    (plist-get (cdr (assoc author org-change-authors)) :color))))
+    (if color
+	(list :inherit org-change-face :foreground color)
+      org-change-face)))
+
 (defun org-change--get-region ()
   "Return content of active region or nil."
   (when (use-region-p)
@@ -240,7 +290,10 @@ echo area is needed for other things."
 	       (new-end (match-end 1))
 	       (open-beg full-beg)        ; {!
 	       (open-end (+ full-beg 2))  ; after {!
-	       (mid-beg new-end))         ; start of !}{!old!}...
+	       (mid-beg new-end)          ; start of !}{!old!}...
+	       (author (car (org-change--split-comment
+			     (or (match-string 3) ""))))
+	       (face (org-change--change-face author)))
 	  (unless quiet
 	    (message "Fontifying changes (%d%%)"
 		     (* 100 (/ (float full-end) (point-max)))))
@@ -258,7 +311,7 @@ echo area is needed for other things."
 	    ;; Hide everything, show deleted marker
 	    (org-change--make-overlay full-beg full-end
 				      'display org-change-deleted-marker
-				      'face 'org-change-link-face)
+				      'face face)
 	    (when org-change-show-deleted
 	      ;; Also show old text after the marker
 	      (let ((ov (make-overlay full-end full-end nil t nil)))
@@ -273,7 +326,7 @@ echo area is needed for other things."
 	    (org-change--make-overlay open-beg open-end 'invisible t)
 	    ;; Face on new text
 	    (org-change--make-overlay new-beg new-end
-				      'face 'org-change-link-face)
+				      'face face)
 	    ;; Hide !}{!old!} and optional {!comment!}
 	    (org-change--make-overlay mid-beg full-end 'invisible t)
 	    (when (and org-change-show-deleted (not (equal old-text "")))
@@ -306,7 +359,8 @@ BEG and END are the modified region boundaries."
   (let ((beg (point)))
     (insert (format "{!%s!}{!%s!}"
 		    (org-change--encode new-text)
-		    (org-change--encode old-text)))
+		    (org-change--encode old-text))
+	    (org-change--author-markup))
     (org-change-fontify beg (point))))
 
 (defun org-change-replace ()
@@ -320,7 +374,8 @@ type the new text."
       (when (use-region-p)
 	(delete-region (region-beginning) (region-end)))
       (let ((beg (point)))
-	(insert (format "{! !}{!%s!}" (org-change--encode old-text)))
+	(insert (format "{! !}{!%s!}" (org-change--encode old-text))
+		(org-change--author-markup))
 	(org-change-fontify beg (point))
 	;; place point inside the new text, on the space
 	(goto-char (+ beg 2))
@@ -355,7 +410,7 @@ Used together with `org-change-kill' to move text around."
 		   (buffer-substring-no-properties yank-beg (point)))))
 	(delete-region yank-beg (point))
 	(insert text)))
-    (insert "!}{!!}")
+    (insert "!}{!!}" (org-change--author-markup))
     (org-change-fontify beg (point))))
 
 (defun org-change-add ()
@@ -366,7 +421,8 @@ If there is no active region, insert an empty addition for typing."
     (when (use-region-p)
       (delete-region (region-beginning) (region-end)))
     (let ((beg (point)))
-      (insert (format "{!%s!}{!!}" (org-change--encode new-text)))
+      (insert (format "{!%s!}{!!}" (org-change--encode new-text))
+	      (org-change--author-markup))
       (org-change-fontify beg (point))
       (when (equal new-text " ")
 	;; place point on the space for typing
@@ -812,18 +868,45 @@ This requires `org-mode' to be available for `org-link-unescape'."
 (defvar org-export-before-processing-functions)
 (defvar org-export-filter-final-output-functions)
 
+(defun org-change--latex-options (author note)
+  "Return the LaTeX optional-argument string for AUTHOR and NOTE.
+AUTHOR becomes the changes package `id', NOTE its `comment'.  Either
+may be empty; the result is empty when both are."
+  (let ((parts nil))
+    (when (and author (not (equal author "")))
+      (push (format "id=%s" author) parts))
+    (when (and note (not (equal note "")))
+      (push (format "comment=%s" note) parts))
+    (if parts
+	(format "[%s]" (mapconcat #'identity (nreverse parts) ", "))
+      "")))
+
 (defun org-change--export-latex (old-text new-text comment)
   "Export a change to LaTeX.
-OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change; an
+@ID prefix in COMMENT is exported as the changes package author id.
 The result is wrapped in @@latex:...@@ so org exports it verbatim."
-  (let ((comment (if (equal comment "") "" (format "[comment=%s]" comment))))
+  (let* ((split (org-change--split-comment comment))
+	 (opts (org-change--latex-options (car split) (cdr split))))
     (format "@@latex:%s@@"
 	    (cond ((equal old-text "")
-		   (format "\\added%s{%s}" comment new-text))
+		   (format "\\added%s{%s}" opts new-text))
 		  ((equal new-text "")
-		   (format "\\deleted%s{%s}" comment old-text))
+		   (format "\\deleted%s{%s}" opts old-text))
 		  (t
-		   (format "\\replaced%s{%s}{%s}" comment new-text old-text))))))
+		   (format "\\replaced%s{%s}{%s}" opts new-text old-text))))))
+
+(defun org-change--latex-author-defs ()
+  "Return \\definechangesauthor lines for every author in `org-change-authors'."
+  (mapconcat
+   (lambda (entry)
+     (let ((id (car entry))
+	   (props (cdr entry)))
+       (format "\\definechangesauthor[name={%s}, color={%s}]{%s}\n"
+	       (or (plist-get props :name) id)
+	       (or (plist-get props :color) "black")
+	       id)))
+   org-change-authors ""))
 
 (defun org-change--make-span (class text)
   "Return string <span class=\"CLASS\">TEXT</span> for HTML export."
@@ -831,29 +914,41 @@ The result is wrapped in @@latex:...@@ so org exports it verbatim."
 	""
       (format "<span class=\"%s\">%s</span>" class text)))
 
+(defun org-change--html-class (base author)
+  "Return the span class BASE, with the AUTHOR class appended if any."
+  (if (and author (not (equal author "")))
+      (format "%s org-change-author-%s" base author)
+    base))
+
 (defun org-change--export-html (old-text new-text comment)
   "Export a change to HTML.
-OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change.
-The result is wrapped in @@html:...@@ so org exports it verbatim."
-  (format "@@html:%s@@"
-	  (cond ((equal old-text "")
-		 (org-change--make-span
-		  "org-change-added"
-		  (concat new-text (org-change--make-span
-				    "org-change-comment"
-				    comment))))
-		((equal new-text "")
-		 (org-change--make-span
-		  "org-change-deleted"
-		  (concat old-text (org-change--make-span
-				    "org-change-comment" comment))))
-		(t
-		 (concat
-		  (org-change--make-span
-		   "org-change-added"
-		   (concat new-text (org-change--make-span
-				     "org-change-comment" comment)))
-		  (org-change--make-span "org-change-deleted" old-text))))))
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change; an
+@ID prefix in COMMENT tags the spans with an org-change-author-ID
+class.  The result is wrapped in @@html:...@@ so org exports it
+verbatim."
+  (let* ((split (org-change--split-comment comment))
+	 (author (car split))
+	 (note (cdr split))
+	 (added (org-change--html-class "org-change-added" author))
+	 (deleted (org-change--html-class "org-change-deleted" author)))
+    (format "@@html:%s@@"
+	    (cond ((equal old-text "")
+		   (org-change--make-span
+		    added
+		    (concat new-text (org-change--make-span
+				      "org-change-comment" note))))
+		  ((equal new-text "")
+		   (org-change--make-span
+		    deleted
+		    (concat old-text (org-change--make-span
+				      "org-change-comment" note))))
+		  (t
+		   (concat
+		    (org-change--make-span
+		     added
+		     (concat new-text (org-change--make-span
+				       "org-change-comment" note)))
+		    (org-change--make-span deleted old-text)))))))
 
 (defvar org-change--exporters
   '((latex . org-change--export-latex)
@@ -880,38 +975,48 @@ safe and do not affect the original buffer."
     (let* ((new-text (org-change--decode (match-string 1)))
 	   (old-text (org-change--decode (match-string 2)))
 	   (comment (org-change--decode (or (match-string 3) "")))
+	   ;; The exporter may call `string-match' (for example to parse
+	   ;; the author out of the comment), which would clobber the
+	   ;; buffer match data that `replace-match' below relies on.
 	   (replacement
-	    (cond
-	     ;; An empty change has nothing to export
-	     ((and (equal new-text "") (equal old-text "") (equal comment ""))
-	      "")
-	     (org-change-final
-	      (if (equal new-text "") "" new-text))
-	     (t
-	      (let ((exporter (alist-get
-			       backend
-			       org-change--exporters
-			       nil nil
-			       #'org-export-derived-backend-p)))
-		(if exporter
-		    (funcall exporter old-text new-text comment)
-		  (user-error "Change markup not supported in %s export"
-			      backend)))))))
+	    (save-match-data
+	      (cond
+	       ;; An empty change has nothing to export
+	       ((and (equal new-text "") (equal old-text "") (equal comment ""))
+		"")
+	       (org-change-final
+		(if (equal new-text "") "" new-text))
+	       (t
+		(let ((exporter (alist-get
+				 backend
+				 org-change--exporters
+				 nil nil
+				 #'org-export-derived-backend-p)))
+		  (if exporter
+		      (funcall exporter old-text new-text comment)
+		    (user-error "Change markup not supported in %s export"
+				backend))))))))
       (replace-match replacement t t))))
 
 (defun org-change-filter-final-output (text backend _)
-  "Add the changes.sty package to the LaTeX preamble.
+  "Add the changes.sty package and author definitions to the preamble.
 TEXT is the whole document and BACKEND is checked for being
-\\='latex or derived from \\='latex."
+\\='latex or derived from \\='latex.  A `\\definechangesauthor' line
+is emitted for each entry in `org-change-authors'."
   (if (and (org-export-derived-backend-p backend 'latex)
 	   (not org-change-final))
+      ;; Use a function replacement so backslashes in the injected
+      ;; preamble are inserted verbatim, without `\N' processing.
       (replace-regexp-in-string
        "\\\\begin{document}"
-       (concat
-	"\\\\usepackage"
-	(when (boundp 'org-change-latex-options) org-change-latex-options)
-	"{changes}\n\\\\begin{document}")
-       text)
+       (lambda (_)
+	 (concat
+	  "\\usepackage"
+	  (when (boundp 'org-change-latex-options) org-change-latex-options)
+	  "{changes}\n"
+	  (org-change--latex-author-defs)
+	  "\\begin{document}"))
+       text nil t)
     text))
 
 (defun org-change--register-export-hooks ()

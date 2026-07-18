@@ -112,6 +112,29 @@ The buffer is replaced in a single step, so ~undo~ restores it too. A couple of 
 - The comparison cost grows with the product of the two versions' sizes, so it is meant for documents and sections rather than very large files. If it is slow, run it on a narrowed region.
 - Word alignment means a change may include the surrounding spaces (for instance ={!red !}{!brown !}=); this is cosmetic and accepts and rejects correctly.
 
+* Authors
+
+When several people review a document, org-change can attribute each change to its author and show it in the author's color.
+
+Set ~org-change-author~ to your short identifier, for example "SG". Every change you then create is tagged with it, stored as an =@=-token in the change's comment:
+#+begin_src org
+  {!new text!}{!old text!}{!@SG!}
+#+end_src
+A change can carry both an author and a comment:
+#+begin_src org
+  {!new text!}{!old text!}{!@SG needs a citation!}
+#+end_src
+
+Register authors and their colors in ~org-change-authors~:
+#+begin_src elisp
+  (setq org-change-authors
+        '(("SG" :name "Stefano" :color "royal blue")
+          ("AB" :name "Alex"    :color "dark green")))
+#+end_src
+Each change is then tinted with its author's color in the buffer. On export the author becomes the ~changes~ package author: LaTeX writes ~\added[id=SG]{...}~ and injects a ~\definechangesauthor~ line for each registered author, while HTML adds an ~org-change-author-SG~ class to the change's spans. For LaTeX, use color names the ~xcolor~ package knows, such as "blue", "red", or "green".
+
+If ~org-change-author~ is nil (the default), changes carry no author and behave exactly as before.
+
 * Showing deleted text
 
 By default, org-change hides replaced text and shows deleted text with a cross. You can choose to show this text by setting ~org-change-show-deleted~ to a non-nil value. The text will then be shown in the customizable face ~org-change-deleted-face~ after the change markup, and will be read-only. This is similar to some word processors, where deleted text is shown as strike-through (but you don't have to use strike-through).
