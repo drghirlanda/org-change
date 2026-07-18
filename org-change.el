@@ -27,8 +27,9 @@
 ;; major mode.  Mark additions with org-change-add (C-` a), deletions
 ;; with org-change-delete (C-` d), and replacements with
 ;; org-change-replace (C-` r).  Accept or reject changes with
-;; org-change-accept (C-` k) and org-change-reject (C-` x).  Move
-;; between changes with org-change-next-change (C-` n) and
+;; org-change-accept (C-` k) and org-change-reject (C-` x).  Comment
+;; on a change with org-change-comment (C-` c).  Move between changes
+;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
@@ -122,6 +123,11 @@ export."
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-comment-key (kbd "C-` c")
+  "Keybinding for `org-change-comment'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-next-key (kbd "C-` n")
   "Keybinding for `org-change-next-change'."
   :type 'key-sequence
@@ -140,6 +146,11 @@ export."
 (defface org-change-deleted-face
   '((t (:foreground "gray")))
   "Face for Org Change deleted/replaced text."
+  :group 'org-change)
+
+(defface org-change-comment-face
+  '((t (:slant italic)))
+  "Face for the comment shown after a change."
   :group 'org-change)
 
 (defcustom org-change-face 'org-change-link-face
@@ -224,6 +235,13 @@ TEXT is COMMENT unchanged."
       (cons (match-string 1 comment) (or (match-string 2 comment) ""))
     (cons nil comment)))
 
+(defun org-change--join-comment (author note)
+  "Build a comment string from AUTHOR (or nil) and NOTE.
+The inverse of `org-change--split-comment'."
+  (cond ((and author (not (equal note ""))) (format "@%s %s" author note))
+	(author (format "@%s" author))
+	(t note)))
+
 (defun org-change--author-markup ()
   "Return comment markup stamping the current author, or an empty string.
 Empty when `org-change-author' is nil or blank."
@@ -252,8 +270,16 @@ it; otherwise use `org-change-face'."
 
 (defun org-change--remove-overlays (&optional rbeg rend)
   "Remove all org-change overlays in region RBEG to REND."
-  (remove-overlays (or rbeg (point-min)) (or rend (point-max))
-		   'org-change-overlay t))
+  (let ((rbeg (or rbeg (point-min)))
+	(rend (or rend (point-max))))
+    (remove-overlays rbeg rend 'org-change-overlay t)
+    ;; `remove-overlays' leaves a zero-length overlay sitting exactly at
+    ;; REND (such as a comment or deleted-text after-string); delete it
+    ;; too, so re-fontifying does not stack a second copy on top.
+    (dolist (ov (overlays-in rend rend))
+      (when (and (overlay-get ov 'org-change-overlay)
+		 (= (overlay-start ov) (overlay-end ov)))
+	(delete-overlay ov)))))
 
 (defun org-change--make-overlay (beg end &rest properties)
   "Create an org-change overlay from BEG to END with PROPERTIES."
@@ -262,6 +288,17 @@ it; otherwise use `org-change-face'."
     (overlay-put ov 'evaporate t)
     (while properties
       (overlay-put ov (pop properties) (pop properties)))
+    ov))
+
+(defun org-change--after-string-overlay (pos string)
+  "Add an org-change overlay at POS showing STRING after it.
+Unlike `org-change--make-overlay', this must not set `evaporate':
+the overlay is empty (zero length), and an empty evaporating
+overlay is deleted at once.  It is cleaned up by
+`org-change--remove-overlays' instead."
+  (let ((ov (make-overlay pos pos nil t nil)))
+    (overlay-put ov 'org-change-overlay t)
+    (overlay-put ov 'after-string string)
     ov))
 
 (defun org-change-fontify (&optional rbeg rend)
@@ -291,8 +328,10 @@ echo area is needed for other things."
 	       (open-beg full-beg)        ; {!
 	       (open-end (+ full-beg 2))  ; after {!
 	       (mid-beg new-end)          ; start of !}{!old!}...
-	       (author (car (org-change--split-comment
-			     (or (match-string 3) ""))))
+	       (split (org-change--split-comment
+		       (org-change--decode (or (match-string 3) ""))))
+	       (author (car split))
+	       (note (cdr split))
 	       (face (org-change--change-face author)))
 	  (unless quiet
 	    (message "Fontifying changes (%d%%)"
@@ -319,12 +358,9 @@ echo area is needed for other things."
 				      'face face)
 	    (when org-change-show-deleted
 	      ;; Also show old text after the marker
-	      (let ((ov (make-overlay full-end full-end nil t nil)))
-		(overlay-put ov 'org-change-overlay t)
-		(overlay-put ov 'evaporate t)
-		(overlay-put ov 'after-string
-			     (propertize old-text
-					 'face 'org-change-deleted-face)))))
+	      (org-change--after-string-overlay
+	       full-end
+	       (propertize old-text 'face 'org-change-deleted-face))))
 	   ;; Addition or replacement: show new text
 	   (t
 	    ;; Hide {! before new text
@@ -336,12 +372,14 @@ echo area is needed for other things."
 	    (org-change--make-overlay mid-beg full-end 'invisible t)
 	    (when (and org-change-show-deleted (not (equal old-text "")))
 	      ;; Show old text after the change
-	      (let ((ov (make-overlay full-end full-end nil t nil)))
-		(overlay-put ov 'org-change-overlay t)
-		(overlay-put ov 'evaporate t)
-		(overlay-put ov 'after-string
-			     (propertize old-text
-					 'face 'org-change-deleted-face))))))
+	      (org-change--after-string-overlay
+	       full-end
+	       (propertize old-text 'face 'org-change-deleted-face)))))
+	  ;; Show the comment note, if any, in italic after the change.
+	  (unless (equal note "")
+	    (org-change--after-string-overlay
+	     full-end
+	     (propertize (concat " " note) 'face 'org-change-comment-face)))
 	  (goto-char full-end))))
     (unless quiet
       (message "Fontifying changes (100%%)"))))
@@ -579,6 +617,35 @@ otherwise process the whole buffer."
 	    (goto-char (match-beginning 0))))))
       (deactivate-mark)))
   (message "No more changes"))
+
+;;; Comments
+
+(defun org-change-comment ()
+  "Add or edit the comment on the change at point.
+Prompt for the comment text, pre-filled with the existing one.  Any
+author stamped on the change is kept; an empty comment removes it."
+  (interactive)
+  (let ((change (org-change--at-change)))
+    (unless change
+      (user-error "No change at point"))
+    ;; Capture positions and the raw comment before prompting or calling
+    ;; `org-change--split-comment', both of which clobber the match data.
+    (let* ((beg (car change))
+	   (end (cdr change))
+	   (pair-end (+ (match-end 2) 2))	; just after {!new!}{!old!}
+	   (split (org-change--split-comment
+		   (org-change--decode (or (match-string 3) ""))))
+	   (author (car split))
+	   (new-note (string-trim (read-string "Comment: " (cdr split))))
+	   (comment (org-change--join-comment author new-note))
+	   (markup (if (equal comment "")
+		       ""
+		     (format "{!%s!}" (org-change--encode comment)))))
+      (delete-region pair-end end)
+      (save-excursion
+	(goto-char pair-end)
+	(insert markup))
+      (org-change-fontify beg (+ pair-end (length markup))))))
 
 ;;; Navigation between changes
 
@@ -1061,6 +1128,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-reject-key #'org-change-reject)
             (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
+            (define-key map org-change-comment-key #'org-change-comment)
             (define-key map org-change-next-key #'org-change-next-change)
             (define-key map org-change-previous-key #'org-change-previous-change)
             map)

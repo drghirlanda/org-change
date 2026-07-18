@@ -542,6 +542,100 @@ and rejecting restores it."
     (should (= (point) 3))
     (should-not org-change--fold-restore)))
 
+;;; Comments
+
+(ert-deftest org-change-test-join-comment ()
+  "Author and note are joined back into a comment string."
+  (should (equal (org-change--join-comment nil "note") "note"))
+  (should (equal (org-change--join-comment nil "") ""))
+  (should (equal (org-change--join-comment "SG" "") "@SG"))
+  (should (equal (org-change--join-comment "SG" "note") "@SG note")))
+
+(ert-deftest org-change-test-comment-adds-to-a-change ()
+  "`org-change-comment' adds a comment to a change that has none."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}")
+    (org-change-mode 1)
+    (goto-char 4)
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "my note")))
+      (org-change-comment))
+    (should (equal (buffer-string) "{!new!}{!old!}{!my note!}"))))
+
+(ert-deftest org-change-test-comment-edits-an-existing-comment ()
+  "`org-change-comment' replaces an existing comment."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}{!old note!}")
+    (org-change-mode 1)
+    (goto-char 4)
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "new note")))
+      (org-change-comment))
+    (should (equal (buffer-string) "{!new!}{!old!}{!new note!}"))))
+
+(ert-deftest org-change-test-comment-preserves-the-author ()
+  "Editing a comment keeps the change's author."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}{!@SG old!}")
+    (org-change-mode 1)
+    (goto-char 4)
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "revised")))
+      (org-change-comment))
+    (should (equal (buffer-string) "{!new!}{!old!}{!@SG revised!}"))))
+
+(ert-deftest org-change-test-comment-empty-input-removes-it ()
+  "An empty comment removes the comment group."
+  (with-temp-buffer
+    (insert "{!new!}{!old!}{!note!}")
+    (org-change-mode 1)
+    (goto-char 4)
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "  ")))
+      (org-change-comment))
+    (should (equal (buffer-string) "{!new!}{!old!}"))))
+
+(ert-deftest org-change-test-comment-shown-in-italic ()
+  "A change's comment note is displayed as an italic after-string."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!}{!@SG see note!} b")
+    (org-change-mode 1)
+    (let ((shown nil))
+      (dolist (ov (overlays-in (point-min) (point-max)))
+	(let ((as (overlay-get ov 'after-string)))
+	  (when (and as (string-match-p "see note" as))
+	    (setq shown as))))
+      (should shown)
+      ;; the author prefix is not part of the shown note
+      (should-not (string-match-p "@SG" shown))
+      (should (eq (get-text-property (1- (length shown)) 'face shown)
+		  'org-change-comment-face)))))
+
+(ert-deftest org-change-test-show-deleted-displays-old-text ()
+  "With `org-change-show-deleted', the deleted text is shown after the change.
+Guards the after-string overlays against being deleted for being empty."
+  (let ((org-change-show-deleted t))
+    (with-temp-buffer
+      (insert "a {!!}{!gone!} b")
+      (org-change-mode 1)
+      (let ((shown nil))
+	(dolist (ov (overlays-in (point-min) (point-max)))
+	  (let ((as (overlay-get ov 'after-string)))
+	    (when (and as (string-match-p "gone" as))
+	      (setq shown t))))
+	(should shown)))))
+
+(ert-deftest org-change-test-comment-shown-only-once ()
+  "Adding a comment must not stack two copies of the after-string."
+  (with-temp-buffer
+    (insert "x {!a!}{!b!} y")
+    (org-change-mode 1)
+    (goto-char 4)
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "note")))
+      (org-change-comment))
+    (let ((n 0))
+      (dolist (ov (overlays-in (point-min) (point-max)))
+	(let ((as (overlay-get ov 'after-string)))
+	  (when (and as (string-match-p "note" as))
+	    (setq n (1+ n)))))
+      (should (= n 1)))))
+
 ;;; Re-fontifying after edits inside multi-line changes
 
 (ert-deftest org-change-test-editing-inside-multiline-change-keeps-markup-hidden ()
