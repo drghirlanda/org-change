@@ -6,7 +6,7 @@
 
 * Note: New syntax in version 0.5
 
-Starting with version 0.5, org-change uses a custom markup syntax instead of org-mode's link syntax. The old syntax ~[[change:old text][new text]]~ has been replaced by ~{!new text!}{!old text!}~. This change allows tracked changes to contain org links, LaTeX references, math, and any other org-mode or LaTeX syntax that was previously impossible to include.
+Starting with version 0.5, org-change uses a custom markup syntax instead of org-mode's link syntax. The old syntax ~[[change:old text][new text]]~ has been replaced by ~{!new text!}{!old text!}~. This change allows tracked changes to contain org links, LaTeX references, math, and any other org-mode or LaTeX syntax that was previously impossible to include. Comments can now be embedded as a third ~{!!}~ block.
 
 If you have files using the old link syntax, you can convert them automatically by running ~M-x org-change-convert-from-links~ in each buffer. This converts all change links to the new format, including comments.
 
@@ -50,11 +50,11 @@ Because the syntax uses ~{!~ and ~!}~ as delimiters, you can freely include org 
 
 ** Escaping the delimiters
 
-The one thing a change cannot contain verbatim is a delimiter itself: the two-character sequences ~{!~ and ~!}~. If your text has them, the parser would mistake them for markup. To handle this, org-change escapes those sequences when it creates a change from a region, inserting a backslash to break the pair: ~{!~ becomes ~{\!~ and ~!}~ becomes ~!\}~. So marking the text =a!}b= as a deletion stores it as
+A change cannot contain org-change delimiters: the two-character sequences ~{!~ and ~!}~. To handle this, org-change escapes those sequences when it creates a change from a region, inserting a backslash to break the pair: ~{!~ becomes ~{\!~ and ~!}~ becomes ~!\}~. So marking the text =a!}b= as a deletion stores it as
 #+begin_src org
   {!!}{!a!\}b!}
 #+end_src
-The escaping is undone automatically when you accept, reject, or export the change, so you always get back the original =a!}b=. Only the delimiter sequences are touched; any other backslash (for example in ~\LaTeX~ or ~\(a=1\)~) is left exactly as it is.
+The escaping is undone automatically when you accept, reject, or export the change.
 
 Two things to keep in mind:
 - Escaping happens for text taken from a *region* (add, delete, replace, kill/yank). Text you *type by hand* into a change is inserted verbatim, so a hand-typed ~{!~ or ~!}~ is not escaped. This is a deliberate trade-off: it is a rare thing to do, and intercepting every keystroke would be intrusive.
@@ -75,11 +75,15 @@ All these act on the active region, marking it as added, deleted, or replaced te
 To jump from change to change, use:
 - ~C-` n~ :: move to the next change.
 - ~C-` p~ :: move to the previous change.
-Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it. When there is no change to move to, org-change leaves point where it is and reports "No next change" or "No previous change" in the minibuffer.
+Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it.
+
+** The change tree
+
+To review all the changes in a document at once, press ~C-` \~ (backslash), analogous to Org's own sparse-tree key. This collapses the buffer to a sparse tree showing only the changes and the headlines above them, hiding everything else. Move between changes with ~C-` n~ and ~C-` p~ as usual. As soon as you edit the buffer the tree is dismissed: your previous view is restored and the change you edit is revealed and centered, so you drop straight back into normal editing. Because it uses Org's folding, this works in org-mode only.
 
 ** Commenting on a change
 
-Press ~C-` c~ on a change to add or edit its comment. You are prompted for the text, pre-filled with the existing comment if there is one; entering an empty comment removes it. The comment is stored in the change's third group and shown in italic just after the change. If the change has an author (see [[Authors]]), the author is kept and only the comment text is shown, since the author is already indicated by color.
+Press ~C-` c~ on a change to add or edit its comment. You are prompted for the text, pre-filled with the existing comment if there is one; entering an empty comment removes it. The comment is stored in the change's third group and shown in italic just after the change. If the change has an author (see [[Authors]]), it is shown as =author: comment= (for example =SG: needs a citation=), so you can tell who commented without having to remember which color is whose. A change that has an author but no comment shows just the author id.
 
 In org-mode, if the target change is hidden inside a folded heading, the jump reveals it so you can see the change rather than just landing on the folded headline. Each jump first restores the fold state from the previous jump, so only the change you are looking at is expanded: stepping onward re-folds it and reveals the next one, leaving the rest of the outline as you had it.
 

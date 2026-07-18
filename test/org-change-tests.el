@@ -741,6 +741,45 @@ data `replace-match' needs."
 			 "<span class=\"org-change-deleted org-change-author-SG\">old</span>"
 			 "@@"))))
 
+;;; Change tree (sparse tree of changes)
+
+(defun org-change-tests--pos (s)
+  "Return the start position of the first occurrence of S."
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward s)
+    (match-beginning 0)))
+
+(ert-deftest org-change-test-tree-needs-org ()
+  "The change tree only works in `org-mode'."
+  (with-temp-buffer
+    (insert "{!x!}{!y!}")
+    (org-change-mode 1)
+    (should-error (org-change-tree) :type 'user-error)))
+
+(ert-deftest org-change-test-tree-reveals-changes-hides-the-rest ()
+  "The change tree shows entries with changes and folds the others."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\n{!x!}{!y!} here\n* B\nplain body\n* C\n{!p!}{!q!} there\n")
+    (org-change-mode 1)
+    (org-change-tree)
+    (should-not (org-fold-folded-p (org-change-tests--pos "{!x!}")))
+    (should-not (org-fold-folded-p (org-change-tests--pos "{!p!}")))
+    (should (org-fold-folded-p (org-change-tests--pos "plain body")))))
+
+(ert-deftest org-change-test-tree-dismissed-by-editing ()
+  "Editing dismisses the tree and restores the previous view."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\n{!x!}{!y!} here\n* B\nplain body\n")
+    (org-change-mode 1)
+    (org-change-tree)
+    (should (org-fold-folded-p (org-change-tests--pos "plain body")))
+    (goto-char (org-change-tests--pos "{!x!}"))
+    (insert "Z")				; fires the dismiss
+    (should-not (org-fold-folded-p (org-change-tests--pos "plain body")))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

@@ -30,7 +30,8 @@
 ;; org-change-accept (C-` k) and org-change-reject (C-` x).  Comment
 ;; on a change with org-change-comment (C-` c).  Move between changes
 ;; with org-change-next-change (C-` n) and
-;; org-change-previous-change (C-` p).  Generate change markup from
+;; org-change-previous-change (C-` p).  Show a sparse tree of all
+;; changes with org-change-tree (C-` \).  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
@@ -135,6 +136,11 @@ export."
 
 (defcustom org-change-previous-key (kbd "C-` p")
   "Keybinding for `org-change-previous-change'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-tree-key (kbd "C-` \\")
+  "Keybinding for `org-change-tree'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -666,6 +672,7 @@ author stamped on the change is kept; an empty comment removes it."
 (declare-function org-fold-core-get-regions "org-fold-core"
 		  (&rest keyword-args))
 (declare-function org-fold-core-regions "org-fold-core" (regions &rest args))
+(declare-function org-occur "org" (regexp &optional keep-previous callback))
 
 (defvar-local org-change--fold-restore nil
   "Function that restores the fold state saved before the last jump.
@@ -746,6 +753,48 @@ time."
     (if dest
 	(org-change--goto-change dest)
       (message "No previous change"))))
+
+;;; Change tree
+
+(defvar-local org-change--tree-fold nil
+  "Fold state saved by `org-change-tree', restored when it is dismissed.")
+
+(defun org-change-tree ()
+  "Show a sparse tree of all changes, like an Org sparse tree.
+Collapse the buffer to the changes and the headlines above them.
+Step between changes with `org-change-next-change' and
+`org-change-previous-change' as usual.  The first edit dismisses
+the tree: the previous view is restored and the change you edit is
+revealed and centered.  Only works in `org-mode'."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "The change tree needs Org mode"))
+  ;; Save the current view once, so re-running does not lose it.  Wrap it
+  ;; in a cons so that a view with no folds (an empty list) is still
+  ;; distinguishable from "no tree shown".
+  (unless org-change--tree-fold
+    (setq org-change--tree-fold
+	  (cons 'regions (org-fold-core-get-regions :with-markers t))))
+  (let ((count (org-occur org-change--regexp)))
+    (add-hook 'before-change-functions #'org-change--dismiss-tree nil t)
+    (when (= count 0)
+      (message "No changes"))))
+
+(defun org-change--dismiss-tree (&rest _)
+  "Restore the view saved by `org-change-tree' and reveal point.
+Runs from `before-change-functions' the first time the buffer is
+edited while the change tree is shown."
+  (remove-hook 'before-change-functions #'org-change--dismiss-tree t)
+  (when org-change--tree-fold
+    (org-fold-core-regions (cdr org-change--tree-fold)
+			   :override t :clean-markers t)
+    (setq org-change--tree-fold nil))
+  ;; Keep the change being edited visible and centered.
+  (when (and (fboundp 'org-fold-folded-p) (org-fold-folded-p (point)))
+    (org-fold-show-set-visibility 'canonical))
+  (when (get-buffer-window (current-buffer))
+    (let ((last-command nil))
+      (recenter-top-bottom))))
 
 (defun org-change-toggle-deleted-text ()
   "Show/hide deleted text."
@@ -1143,6 +1192,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-comment-key #'org-change-comment)
             (define-key map org-change-next-key #'org-change-next-change)
             (define-key map org-change-previous-key #'org-change-previous-change)
+            (define-key map org-change-tree-key #'org-change-tree)
             map)
   (if org-change-mode
       (progn
@@ -1155,8 +1205,10 @@ is emitted for each entry in `org-change-authors'."
     (remove-hook 'post-self-insert-hook #'org-change--erase-extra-space t)
     (remove-hook 'after-change-functions #'org-change--after-change t)
     (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
+    (remove-hook 'before-change-functions #'org-change--dismiss-tree t)
     (org-change--forget-extra-space)
-    (setq org-change--fold-restore nil)
+    (setq org-change--fold-restore nil
+	  org-change--tree-fold nil)
     (org-change--remove-overlays)))
 
 (provide 'org-change)
