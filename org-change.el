@@ -242,6 +242,14 @@ The inverse of `org-change--split-comment'."
 	(author (format "@%s" author))
 	(t note)))
 
+(defun org-change--comment-display (author note)
+  "Return the text shown after a change for AUTHOR and NOTE.
+Combined as \"AUTHOR: NOTE\", so the author is legible without
+relying on color; either part may be absent."
+  (cond ((and author (not (equal note ""))) (format "%s: %s" author note))
+	(author author)
+	(t note)))
+
 (defun org-change--author-markup ()
   "Return comment markup stamping the current author, or an empty string.
 Empty when `org-change-author' is nil or blank."
@@ -375,11 +383,15 @@ echo area is needed for other things."
 	      (org-change--after-string-overlay
 	       full-end
 	       (propertize old-text 'face 'org-change-deleted-face)))))
-	  ;; Show the comment note, if any, in italic after the change.
-	  (unless (equal note "")
-	    (org-change--after-string-overlay
-	     full-end
-	     (propertize (concat " " note) 'face 'org-change-comment-face)))
+	  ;; Show the author and comment, if any, in italic after the
+	  ;; change, as "author: note" -- so the author is legible
+	  ;; without having to remember which color is whose.
+	  (let ((shown (org-change--comment-display author note)))
+	    (unless (equal shown "")
+	      (org-change--after-string-overlay
+	       full-end
+	       (propertize (concat " " shown)
+			   'face 'org-change-comment-face))))
 	  (goto-char full-end))))
     (unless quiet
       (message "Fontifying changes (100%%)"))))

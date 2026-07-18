@@ -591,8 +591,15 @@ and rejecting restores it."
       (org-change-comment))
     (should (equal (buffer-string) "{!new!}{!old!}"))))
 
-(ert-deftest org-change-test-comment-shown-in-italic ()
-  "A change's comment note is displayed as an italic after-string."
+(ert-deftest org-change-test-comment-display ()
+  "The author and note are shown as \"author: note\"."
+  (should (equal (org-change--comment-display "SG" "my note") "SG: my note"))
+  (should (equal (org-change--comment-display "SG" "") "SG"))
+  (should (equal (org-change--comment-display nil "my note") "my note"))
+  (should (equal (org-change--comment-display nil "") "")))
+
+(ert-deftest org-change-test-comment-shown-in-italic-with-author ()
+  "A change's comment is shown as an italic \"author: note\" after-string."
   (with-temp-buffer
     (insert "a {!new!}{!old!}{!@SG see note!} b")
     (org-change-mode 1)
@@ -602,8 +609,9 @@ and rejecting restores it."
 	  (when (and as (string-match-p "see note" as))
 	    (setq shown as))))
       (should shown)
-      ;; the author prefix is not part of the shown note
-      (should-not (string-match-p "@SG" shown))
+      ;; author is shown as "SG: ", not the raw "@SG"
+      (should (string-match-p "SG: see note" shown))
+      (should-not (string-match-p "@" shown))
       (should (eq (get-text-property (1- (length shown)) 'face shown)
 		  'org-change-comment-face)))))
 
