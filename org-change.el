@@ -685,6 +685,9 @@ author stamped on the change is kept; an empty comment removes it."
 		  (&rest keyword-args))
 (declare-function org-fold-core-regions "org-fold-core" (regions &rest args))
 (declare-function org-occur "org" (regexp &optional keep-previous callback))
+(declare-function org-remove-occur-highlights "org"
+		  (&optional beg end noremove))
+(defvar org-occur-highlights)
 
 (defvar-local org-change--fold-restore nil
   "Function that restores the fold state saved before the last jump.
@@ -788,9 +791,18 @@ revealed and centered.  Only works in `org-mode'."
     (setq org-change--tree-fold
 	  (cons 'regions (org-fold-core-get-regions :with-markers t))))
   (let ((count (org-occur org-change--regexp)))
+    ;; The changes are already highlighted by fontification, so drop the
+    ;; extra org-occur match highlights (this keeps the folding).
+    (org-remove-occur-highlights)
     (add-hook 'before-change-functions #'org-change--dismiss-tree nil t)
-    (when (= count 0)
-      (message "No changes"))))
+    (if (= count 0)
+	(message "No changes")
+      ;; Land on the first change.
+      (goto-char (point-min))
+      (when (org-change--search-forward nil t)
+	(goto-char (match-beginning 0)))
+      (when (get-buffer-window (current-buffer))
+	(recenter)))))
 
 (defun org-change--dismiss-tree (&rest _)
   "Restore the view saved by `org-change-tree' and reveal point.

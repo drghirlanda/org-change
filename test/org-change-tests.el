@@ -825,6 +825,25 @@ data `replace-match' needs."
     (should-not (org-fold-folded-p (org-change-tests--pos "{!p!}")))
     (should (org-fold-folded-p (org-change-tests--pos "plain body")))))
 
+(ert-deftest org-change-test-tree-lands-on-first-change ()
+  "Showing the tree moves point to the first change."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\nlead {!x!}{!y!} more\n* B\n{!p!}{!q!} tail\n")
+    (org-change-mode 1)
+    (goto-char (point-max))
+    (org-change-tree)
+    (should (= (point) (org-change-tests--pos "{!x!}")))))
+
+(ert-deftest org-change-test-tree-adds-no-extra-highlighting ()
+  "The tree does not add org-occur highlights on top of the fontification."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\n{!x!}{!y!} here\n")
+    (org-change-mode 1)
+    (org-change-tree)
+    (should-not org-occur-highlights)))
+
 (ert-deftest org-change-test-tree-dismissed-by-editing ()
   "Editing dismisses the tree and restores the previous view."
   (with-temp-buffer
