@@ -426,10 +426,18 @@ lines re-fontifies the whole change rather than truncating it."
 
 ;;; Change creation functions
 
+(defun org-change--consume-region ()
+  "Delete the active region, if any, and deactivate the mark.
+The mark has to go: once its text has been turned into a change,
+a still-active region would make the next accept or reject act on
+the region rather than on the change just made."
+  (when (use-region-p)
+    (delete-region (region-beginning) (region-end))
+    (deactivate-mark)))
+
 (defun org-change--mark-change (old-text new-text)
   "Delete region and insert change markup with OLD-TEXT and NEW-TEXT."
-  (when (use-region-p)
-    (delete-region (region-beginning) (region-end)))
+  (org-change--consume-region)
   (let ((beg (point)))
     (insert (format "{!%s!}{!%s!}"
 		    (org-change--encode new-text)
@@ -445,8 +453,7 @@ type the new text."
   (let ((old-text (org-change--get-region)))
     (if (not old-text)
 	(user-error "Select text to be replaced")
-      (when (use-region-p)
-	(delete-region (region-beginning) (region-end)))
+      (org-change--consume-region)
       (let ((beg (point)))
 	(insert (format "{! !}{!%s!}" (org-change--encode old-text))
 		(org-change--author-markup))
@@ -492,8 +499,7 @@ Used together with `org-change-kill' to move text around."
 If there is no active region, insert an empty addition for typing."
   (interactive "")
   (let ((new-text (or (org-change--get-region) " ")))
-    (when (use-region-p)
-      (delete-region (region-beginning) (region-end)))
+    (org-change--consume-region)
     (let ((beg (point)))
       (insert (format "{!%s!}{!!}" (org-change--encode new-text))
 	      (org-change--author-markup))
@@ -579,40 +585,101 @@ Also sets match data for `org-change--regexp'."
 	    (throw 'found nil)))
 	nil))))
 
-(defun org-change--accept-or-reject (accept)
-  "Accept (ACCEPT is t) or reject (ACCEPT is nil) change at point.
-If there is no change at point, accept or reject all changes in
-the active region."
+(defun org-change--apply-change (accept)
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) the change at point.
+Point does not move: if it was inside the change, it is put back on
+the same spot of the text that replaces it.  Return the position
+just after that text, or nil if there was no change at point."
   (let ((change-position (org-change--at-change))
 	(inhibit-read-only t))
-    (if change-position
-	(let ((new-text (org-change--decode (match-string-no-properties 1)))
-	      (old-text (org-change--decode (match-string-no-properties 2)))
-	      (beg (car change-position))
-	      (end (cdr change-position)))
-	  (org-change--remove-overlays beg end)
-	  (delete-region beg end)
-	  (if accept
-	      (unless (equal new-text "")
-		(insert new-text))
-	    (insert old-text)))
-      (when (use-region-p)
+    (when change-position
+      (let* ((new-text (org-change--decode (match-string-no-properties 1)))
+	     (old-text (org-change--decode (match-string-no-properties 2)))
+	     (beg (car change-position))
+	     (end (cdr change-position))
+	     (text (if accept new-text old-text))
+	     ;; How far into the change point sits.  The text shown starts
+	     ;; two characters in, past the opening `{!', so that is where
+	     ;; the offset is measured from.  Nil when point is elsewhere:
+	     ;; then it must not be touched at all.
+	     (offset (and (<= beg (point)) (<= (point) end)
+			  (min (max 0 (- (point) beg 2))
+			       (length text))))
+	     (stop nil))
+	(org-change--remove-overlays beg end)
 	(save-excursion
-	  (save-restriction
-	    (goto-char (region-beginning))
-	    (while (org-change--search-forward nil t)
-	      (let ((beg (match-beginning 0)))
-		(goto-char beg)
-		(org-change--accept-or-reject accept)
-		(goto-char beg)))))))))
+	  (goto-char beg)
+	  (delete-region beg end)
+	  (unless (equal text "")
+	    (insert text))
+	  (setq stop (point)))
+	(when offset
+	  (goto-char (+ beg offset)))
+	stop))))
+
+(defun org-change--apply-region (accept rbeg rend)
+  "Accept or reject the changes between RBEG and REND.
+ACCEPT is as in `org-change--apply-change'.  A change is acted on
+when it lies entirely within the region, and also when point is
+inside it: the cursor says what you mean, so the change under it
+is taken whole even if the region only reaches into it.  Every
+other change is left alone.  Return the number of changes acted
+on."
+  ;; Positions have to be markers: accepting or rejecting shortens or
+  ;; lengthens the text, and plain positions would drift.
+  (let* ((at-point (org-change--at-change))
+	 (end (copy-marker rend t))
+	 (point-beg (and at-point (copy-marker (car at-point))))
+	 ;; The change under point may start before the region or run past
+	 ;; it, so widen the search to take it in.
+	 (start (if at-point (min rbeg (car at-point)) rbeg))
+	 (limit (copy-marker (if at-point (max rend (cdr at-point)) rend) t))
+	 (count 0))
+    (save-excursion
+      (goto-char start)
+      (while (org-change--search-forward limit t)
+	(let ((beg (match-beginning 0))
+	      (stop (match-end 0)))
+	  (if (or (<= stop (marker-position end))
+		  (and point-beg (= beg (marker-position point-beg))))
+	      (let ((done (progn (goto-char beg)
+				 (org-change--apply-change accept))))
+		(if done
+		    (progn
+		      (setq count (1+ count))
+		      ;; `org-change--apply-change' leaves point where it was,
+		      ;; so step past the replacement by hand.
+		      (goto-char done))
+		  ;; Should not happen, but never loop forever on it.
+		  (goto-char (1+ beg))))
+	    (goto-char stop)))))
+    (set-marker end nil)
+    (set-marker limit nil)
+    (when point-beg (set-marker point-beg nil))
+    count))
+
+(defun org-change--accept-or-reject (accept)
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) changes.
+With an active region, act on every change inside it, and on no
+other; otherwise act on the change at point."
+  (if (use-region-p)
+      (let ((count (org-change--apply-region
+		    accept (region-beginning) (region-end))))
+	(deactivate-mark)
+	(message "%d change%s %s"
+		 count
+		 (if (= count 1) "" "s")
+		 (if accept "accepted" "rejected")))
+    (unless (org-change--apply-change accept)
+      (message "No change at point"))))
 
 (defun org-change-accept ()
-  "Accept change at point."
+  "Accept the change at point, or every change in the active region."
   (interactive "")
   (org-change--accept-or-reject t))
 
 (defun org-change-reject ()
-  "Reject change at point."
+  "Reject the change at point, or every change in the active region."
   (interactive "")
   (org-change--accept-or-reject nil))
 
@@ -628,17 +695,23 @@ otherwise process the whole buffer."
 	(setq beg (use-region-beginning)
 	      end (use-region-end))
 	(set-mark end))
+      ;; A marker, so that accepting or rejecting a change does not make
+      ;; the bound drift over the text that follows.
+      (setq end (copy-marker end t))
       (goto-char beg)
       (while (org-change--search-forward end t)
 	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
 	  (cond
+	   ;; Step past the replacement: `org-change--apply-change' leaves
+	   ;; point where it was, which would prompt for the same change again.
 	   ((char-equal answer ?y)
-	    (org-change--accept-or-reject t))
+	    (goto-char (or (org-change--apply-change t) (point))))
 	   ((char-equal answer ?n)
-	    (org-change--accept-or-reject nil))
+	    (goto-char (or (org-change--apply-change nil) (point))))
 	   ((char-equal answer ?\s)) ; skip
 	   (t
 	    (goto-char (match-beginning 0))))))
+      (set-marker end nil)
       (deactivate-mark)))
   (message "No more changes"))
 
@@ -767,8 +840,8 @@ time."
     (org-change-replace-key . "Replace the region with new text")
     (org-change-kill-key . "Kill (cut) the region as a deletion")
     (org-change-yank-key . "Yank (paste) as an addition")
-    (org-change-accept-key . "Accept the change at point")
-    (org-change-reject-key . "Reject the change at point")
+    (org-change-accept-key . "Accept the change at point (or in the region)")
+    (org-change-reject-key . "Reject the change at point (or in the region)")
     (org-change-accept-reject-all-key . "Accept or reject every change, one by one")
     (org-change-comment-key . "Add or edit the change's comment")
     (org-change-next-key . "Go to the next change")

@@ -94,12 +94,12 @@ To move sections of text from one place to another, you can use the key sequence
 ** Accepting and rejecting changes
 
 Key sequences are also provided to accept or reject changes:
-- ~C-` k~ :: to accept the change under the cursor.
-- ~C-` x~ :: to reject the change under the cursor.
+- ~C-` k~ :: to accept the change under the cursor, or every change in the active region.
+- ~C-` x~ :: to reject the change under the cursor, or every change in the active region.
 - ~C-` b~ :: to go through all changes, starting at the current point, and accept, reject, or skip them. The ~b~ is mnemonic for "buffer" as you are processing all changes in the buffer.
-"Accept" means to delete the change markup (including any comments) and insert the new text (or nothing, if the change is a deletion). "Reject" means to delete the change markup and insert the old text (or nothing, if the change is an addition).
+"Accept" means to delete the change markup (including any comments) and insert the new text (or nothing, if the change is a deletion). "Reject" means to delete the change markup and insert the old text (or nothing, if the change is an addition). Point stays put: if it was inside the change, it is left on the same spot of the text that replaces it, so accepting or rejecting while you write does not send the cursor to the end of the paragraph.
 
-If there is no change under the cursor, accept and reject work on all changes in the active region. If there is no active region, nothing happens. You can accept or reject all changes in a document by selecting the whole buffer, but note that this deletes all changes. If you just want to export a clean manuscript, see section [[Producing a clean document]].
+When the region is active, accept and reject work on every change that lies entirely within it, plus the change under the cursor, which is always taken whole even if the region only reaches into it. Other changes, including ones the region merely clips, are left alone. Emacs reports how many changes were processed, and the region is deactivated afterwards. Without an active region, the commands act on the change under the cursor, and say "No change at point" if there is none. You can accept or reject all changes in a document by selecting the whole buffer, but note that this deletes all changes. If you just want to export a clean manuscript, see section [[Producing a clean document]].
 
 * Generating changes from two versions
 

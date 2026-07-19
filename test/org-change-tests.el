@@ -798,6 +798,171 @@ data `replace-match' needs."
     (should (member "No changes"
 		    (org-change-tests--messages-while #'org-change-info)))))
 
+;;; Accepting and rejecting over a region
+
+(defun org-change-tests--over-region (text beg end fn)
+  "Insert TEXT, mark BEG to END, call FN, return the resulting buffer."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert text)
+    (org-change-tests--mark-region beg end)
+    (funcall fn)
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(ert-deftest org-change-test-region-accept-leaves-changes-outside-alone ()
+  "Only changes inside the region are accepted."
+  (should (equal (org-change-tests--over-region
+		  "one {!A!}{!!} two {!B!}{!!} three"
+		  1 15 #'org-change-accept)
+		 "one A two {!B!}{!!} three")))
+
+(ert-deftest org-change-test-region-reject-leaves-changes-outside-alone ()
+  "Only changes inside the region are rejected."
+  (should (equal (org-change-tests--over-region
+		  "one {!!}{!A!} two {!!}{!B!} three"
+		  1 15 #'org-change-reject)
+		 "one A two {!!}{!B!} three")))
+
+(ert-deftest org-change-test-region-handles-every-change-in-it ()
+  "A region containing several changes processes all of them.
+Point sits at the end of a change, which must not shadow the
+region and reduce the command to that one change."
+  (should (equal (org-change-tests--over-region
+		  "x {!A!}{!!} y {!B!}{!!} z {!C!}{!!} w"
+		  3 24 #'org-change-accept)
+		 "x A y B z {!C!}{!!} w")))
+
+(ert-deftest org-change-test-region-ignores-a-change-it-only-partly-covers ()
+  "A change straddling the region is left alone when point is not in it.
+The region is marked backwards, so that point sits at its
+beginning, outside any change."
+  (should (equal (org-change-tests--over-region
+		  "one {!A!}{!!} two {!B!}{!!} three"
+		  20 1 #'org-change-accept)
+		 "one A two {!B!}{!!} three")))
+
+(ert-deftest org-change-test-region-takes-the-change-at-point-whole ()
+  "The change under point is acted on even if the region only reaches into it."
+  (should (equal (org-change-tests--over-region
+		  "one {!A!}{!!} two {!B!}{!!} three"
+		  1 20 #'org-change-accept)
+		 "one A two B three")))
+
+(ert-deftest org-change-test-region-takes-a-change-starting-before-it ()
+  "The change under point counts even when it starts before the region.
+Marked backwards, so point lands inside the first change while
+the region reaches to the right."
+  (should (equal (org-change-tests--over-region
+		  "one {!A!}{!!} two {!B!}{!!} three"
+		  26 7 #'org-change-accept)
+		 "one A two {!B!}{!!} three")))
+
+(ert-deftest org-change-test-region-with-no-changes-is-harmless ()
+  "A region without changes leaves the buffer alone."
+  (should (equal (org-change-tests--over-region
+		  "nothing to see here"
+		  1 8 #'org-change-accept)
+		 "nothing to see here")))
+
+(ert-deftest org-change-test-region-reports-how-many-it-did ()
+  "Operating on a region says how many changes it touched."
+  (should (member "2 changes accepted"
+		  (org-change-tests--messages-while
+		   (lambda ()
+		     (org-change-tests--over-region
+		      "x {!A!}{!!} y {!B!}{!!} z"
+		      1 24 #'org-change-accept))))))
+
+(ert-deftest org-change-test-accept-without-region-still-works ()
+  "Without a region, accept still applies to the change at point."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "one {!A!}{!!} two {!B!}{!!} three")
+    (goto-char 7)
+    (org-change-accept)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "one A two {!B!}{!!} three"))))
+
+;;; Point does not move when a change is accepted or rejected
+
+(ert-deftest org-change-test-accept-keeps-point-on-the-same-character ()
+  "Accepting from inside the new text leaves point on that character."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "a {!brown!}{!red!} b")
+    (goto-char 8)			; the `w' of "brown"
+    (should (equal (char-after) ?w))
+    (org-change-accept)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "a brown b"))
+    (should (equal (char-after) ?w))))
+
+(ert-deftest org-change-test-accept-does-not-jump-to-the-end ()
+  "Point must not land past the accepted text."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "a {!brown!}{!red!} b")
+    (goto-char 5)			; the `b' of "brown"
+    (org-change-accept)
+    (should (equal (point) 3))))
+
+(ert-deftest org-change-test-reject-keeps-point-inside-the-old-text ()
+  "Rejecting puts point at the same offset in the restored text."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "a {!brown!}{!red!} b")
+    (goto-char 6)			; second character of the new text
+    (org-change-reject)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "a red b"))
+    (should (equal (char-after) ?e))))
+
+(ert-deftest org-change-test-accept-clamps-point-to-shorter-text ()
+  "Point past the end of the replacement lands at its end, not beyond."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "a {!brown!}{!red!} b")
+    (goto-char 10)			; near the end of "brown"
+    (org-change-reject)			; "red" is shorter
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "a red b"))
+    (should (<= (point) 6))))
+
+(ert-deftest org-change-test-accept-elsewhere-leaves-point-alone ()
+  "Point outside the changes rides along with its own text.
+It ends up on the same character it started on, shifted only by
+what the accepted change removed before it."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "start {!A!}{!!} end")
+    (org-change-tests--mark-region 1 18)	; point lands on the `n' of "end"
+    (should (equal (char-after) ?n))
+    (org-change-accept)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "start A end"))
+    (should (equal (char-after) ?n))))
+
+(ert-deftest org-change-test-region-accept-terminates ()
+  "Keeping point put must not make the region loop revisit a change.
+The accepted text itself contains change delimiters, which a
+restarted search could match again."
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "x {!a{\\!b!}{!!} y")
+    (org-change-tests--mark-region (point-min) (point-max))
+    (with-timeout (5 (ert-fail "org-change-accept did not terminate"))
+      (org-change-accept))
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "x a{!b y"))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
