@@ -77,10 +77,6 @@ To jump from change to change, use:
 - ~C-` p~ :: move to the previous change.
 Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it.
 
-** The change tree
-
-To review all the changes in a document at once, press ~C-` \~ (backslash), analogous to Org's own sparse-tree key. This collapses the buffer to a sparse tree showing only the changes and the headlines above them, hiding everything else. Move between changes with ~C-` n~ and ~C-` p~ as usual. As soon as you edit the buffer the tree is dismissed: your previous view is restored and the change you edit is revealed and centered, so you drop straight back into normal editing. Because it uses Org's folding, this works in org-mode only.
-
 ** Counting changes
 
 Press ~C-` i~ to show, in the minibuffer, how many additions, deletions, and replacements the document contains, for example "3 additions, 2 deletions, 1 replacement".
