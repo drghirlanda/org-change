@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.10.3
+;; Version: 0.10.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -27,7 +27,8 @@
 ;; major mode.  Mark additions with org-change-add (C-` a), deletions
 ;; with org-change-delete (C-` d), and replacements with
 ;; org-change-replace (C-` r).  Accept or reject changes with
-;; org-change-accept (C-` k) and org-change-reject (C-` x).  Comment
+;; org-change-accept (C-` k) and org-change-reject (C-` x), or with
+;; C-` K and C-` X to move to the next change as well.  Comment
 ;; on a change with org-change-comment (C-` c).  Move between changes
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Count them with
@@ -112,6 +113,16 @@ export."
 
 (defcustom org-change-reject-key (kbd "C-` x")
   "Keybinding for `org-change-reject'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-accept-and-next-key (kbd "C-` K")
+  "Keybinding for `org-change-accept-and-next'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-reject-and-next-key (kbd "C-` X")
+  "Keybinding for `org-change-reject-and-next'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -588,8 +599,11 @@ Also sets match data for `org-change--regexp'."
 (defun org-change--apply-change (accept)
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) the change at point.
 Point does not move: if it was inside the change, it is put back on
-the same spot of the text that replaces it.  Return the position
-just after that text, or nil if there was no change at point."
+the same spot of the text that replaces it.  Where the two sides of
+the change come together, a doubled space is reduced to one, as
+`org-change--join-spaces' explains.  Return the position just after
+the text that replaces the change, or nil if there was no change at
+point."
   (let ((change-position (org-change--at-change))
 	(inhibit-read-only t))
     (when change-position
@@ -615,7 +629,31 @@ just after that text, or nil if there was no change at point."
 	  (setq stop (point)))
 	(when offset
 	  (goto-char (+ beg offset)))
+	;; Join the two seams, the later one first so that the earlier
+	;; position stays valid.  `stop' has to be a marker across the join
+	;; at `beg', which can delete text before it.
+	(let ((stop-marker (copy-marker stop t)))
+	  (org-change--join-spaces stop)
+	  (org-change--join-spaces beg)
+	  (setq stop (marker-position stop-marker))
+	  (set-marker stop-marker nil))
 	stop))))
+
+(defun org-change--join-spaces (pos)
+  "Collapse to one the run of spaces the text at POS was joined into.
+POS is a seam left by accepting or rejecting: what is before it
+and what is after it used to be separated by change markup.  When
+both sides carry a space, the two are now next to each other, and
+the run is reduced to a single space.  When only one side does,
+there is nothing to join, so indentation, and runs the author
+wrote inside a change, are left alone."
+  (save-excursion
+    (goto-char pos)
+    (when (and (eq (char-before) ?\s) (eq (char-after) ?\s))
+      (skip-chars-backward " ")
+      (let ((from (point)))
+	(skip-chars-forward " ")
+	(delete-region (1+ from) (point))))))
 
 (defun org-change--apply-region (accept rbeg rend)
   "Accept or reject the changes between RBEG and REND.
@@ -682,6 +720,22 @@ other; otherwise act on the change at point."
   "Reject the change at point, or every change in the active region."
   (interactive "")
   (org-change--accept-or-reject nil))
+
+(defun org-change-accept-and-next ()
+  "Accept the change at point, or the region's changes, then move on.
+Like `org-change-accept', but afterwards point goes to the next
+change, so that a document can be reviewed with one key."
+  (interactive "")
+  (org-change--accept-or-reject t)
+  (org-change-next-change))
+
+(defun org-change-reject-and-next ()
+  "Reject the change at point, or the region's changes, then move on.
+Like `org-change-reject', but afterwards point goes to the next
+change, so that a document can be reviewed with one key."
+  (interactive "")
+  (org-change--accept-or-reject nil)
+  (org-change-next-change))
 
 (defun org-change-accept-reject-all ()
   "Go through all changes, prompting to accept or reject each one.
@@ -750,7 +804,16 @@ author stamped on the change is kept; an empty comment removes it."
 (declare-function org-fold-show-set-visibility "org-fold" (detail))
 (declare-function org-fold-core-get-regions "org-fold-core"
 		  (&rest keyword-args))
-(declare-function org-fold-core-regions "org-fold-core" (regions &rest args))
+
+;; `org-fold-core-regions' is a macro, not a function, so it has to be
+;; loaded when this file is compiled: without it the call below is
+;; compiled as a function call and fails at run time with
+;; `invalid-function'.  A `declare-function' would not do.  org-fold-core
+;; ships with Emacs, and the mode only calls it inside `org-mode'.
+(eval-when-compile (require 'org-fold-core))
+;; Called by the code that macro expands to.
+(declare-function org-fold-core-region "org-fold-core"
+		  (from to flag &optional spec-or-alias))
 
 (defvar-local org-change--fold-restore nil
   "Function that restores the fold state saved before the last jump.
@@ -842,6 +905,8 @@ time."
     (org-change-yank-key . "Yank (paste) as an addition")
     (org-change-accept-key . "Accept the change at point (or in the region)")
     (org-change-reject-key . "Reject the change at point (or in the region)")
+    (org-change-accept-and-next-key . "Accept the change, then go to the next one")
+    (org-change-reject-and-next-key . "Reject the change, then go to the next one")
     (org-change-accept-reject-all-key . "Accept or reject every change, one by one")
     (org-change-comment-key . "Add or edit the change's comment")
     (org-change-next-key . "Go to the next change")
@@ -1288,6 +1353,8 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-replace-key #'org-change-replace)
             (define-key map org-change-accept-key #'org-change-accept)
             (define-key map org-change-reject-key #'org-change-reject)
+            (define-key map org-change-accept-and-next-key #'org-change-accept-and-next)
+            (define-key map org-change-reject-and-next-key #'org-change-reject-and-next)
             (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
             (define-key map org-change-comment-key #'org-change-comment)

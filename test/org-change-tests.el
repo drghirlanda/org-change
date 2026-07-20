@@ -963,6 +963,176 @@ restarted search could match again."
     (should (equal (buffer-substring-no-properties (point-min) (point-max))
 		   "x a{!b y"))))
 
+;;; Accepting or rejecting and moving on
+
+(ert-deftest org-change-test-accept-and-next-moves-to-the-next-change ()
+  "Accept-and-next applies the change and lands on the one after it."
+  (with-temp-buffer
+    (org-mode)
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 6)			; inside change 1
+    (org-change-accept-and-next)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "aa n1 bb {!n2!}{!o2!} cc"))
+    (should (= (point) 10))))
+
+(ert-deftest org-change-test-reject-and-next-moves-to-the-next-change ()
+  "Reject-and-next restores the old text and lands on the next change."
+  (with-temp-buffer
+    (org-mode)
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc")
+    (org-change-mode 1)
+    (goto-char 6)			; inside change 1
+    (org-change-reject-and-next)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "aa o1 bb {!n2!}{!o2!} cc"))
+    (should (= (point) 10))))
+
+(ert-deftest org-change-test-accept-and-next-at-the-last-change ()
+  "With nothing after it, accept-and-next still accepts, and says so."
+  (with-temp-buffer
+    (org-mode)
+    (insert "aa {!n1!}{!o1!} cc")
+    (org-change-mode 1)
+    (goto-char 6)
+    (should (member "No next change"
+		    (org-change-tests--messages-while
+		     #'org-change-accept-and-next)))
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "aa n1 cc"))))
+
+(ert-deftest org-change-test-accept-and-next-over-a-region ()
+  "Over a region, accept-and-next takes the region's changes, then moves on."
+  (with-temp-buffer
+    (org-mode)
+    (insert "aa {!n1!}{!o1!} bb {!n2!}{!o2!} cc {!n3!}{!o3!} dd")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 1 31)	; changes 1 and 2, not 3
+    (org-change-accept-and-next)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "aa n1 bb n2 cc {!n3!}{!o3!} dd"))
+    (should (= (point) 16))))
+
+;;; Rejecting restores the text exactly
+
+(defun org-change-tests--reject-round-trip (text make)
+  "Mark every region of TEXT with MAKE, reject it, return offending cases.
+Each case is a list of the region, the markup, and what rejecting
+left behind.  An empty list means every region round-tripped."
+  (let ((bad nil))
+    (dotimes (i (length text))
+      (dotimes (j (length text))
+	(let ((beg (1+ i)) (end (1+ j)))
+	  (when (< beg end)
+	    (with-temp-buffer
+	      (org-mode)
+	      (insert text)
+	      (org-change-mode 1)
+	      (org-change-tests--mark-region beg end)
+	      (funcall make)
+	      (let ((markup (buffer-substring-no-properties
+			     (point-min) (point-max))))
+		(org-change-tests--mark-region (point-min) (point-max))
+		(org-change-reject)
+		(let ((after (buffer-substring-no-properties
+			      (point-min) (point-max))))
+		  (unless (equal after text)
+		    (push (list (substring text (1- beg) (1- end)) markup after)
+			  bad)))))))))
+    bad))
+
+(ert-deftest org-change-test-rejecting-a-deletion-restores-the-text ()
+  "Rejecting a deletion puts back exactly what was there, spaces and all."
+  (should-not (org-change-tests--reject-round-trip
+	       "the quick brown fox" #'org-change-delete)))
+
+(ert-deftest org-change-test-rejecting-a-replacement-restores-the-text ()
+  "Rejecting a replacement puts back exactly what was there.
+In particular the space `org-change-replace' leaves as a typing
+placeholder must not survive into the restored text."
+  (should-not (org-change-tests--reject-round-trip
+	       "the quick brown fox" #'org-change-replace)))
+
+(ert-deftest org-change-test-rejecting-a-kill-restores-the-text ()
+  "Rejecting a killed region puts back exactly what was there."
+  (should-not (org-change-tests--reject-round-trip
+	       "the quick brown fox" #'org-change-kill)))
+
+(ert-deftest org-change-test-rejecting-a-diff-restores-the-old-version ()
+  "Rejecting every change from a diff gives back the old version verbatim.
+Word-level diffs split text on space runs, so a mishandled
+boundary would show up here as a doubled or missing space."
+  (let* ((words '("the" "quick" "brown" "fox" "jumps"))
+	 (old (string-join words " ")))
+    (dotimes (i (length words))
+      (dolist (new (list
+		    ;; drop word i, replace it, insert before it, drop two
+		    (string-join (append (seq-take words i)
+					 (seq-drop words (1+ i))) " ")
+		    (string-join (append (seq-take words i) (list "new")
+					 (seq-drop words (1+ i))) " ")
+		    (string-join (append (seq-take words i) (list "new")
+					 (seq-drop words i)) " ")
+		    (string-join (append (seq-take words i)
+					 (seq-drop words (+ i 2))) " ")))
+	(with-temp-buffer
+	  (org-mode)
+	  (insert (org-change--diff-to-markup old new))
+	  (org-change-mode 1)
+	  (org-change-tests--mark-region (point-min) (point-max))
+	  (org-change-reject)
+	  (should (equal (buffer-substring-no-properties (point-min) (point-max))
+			 old)))))))
+
+;;; Spaces left behind by accepting or rejecting
+
+(defun org-change-tests--apply-at (text pos accept)
+  "Insert TEXT, accept or reject the change at POS, return the buffer."
+  (with-temp-buffer
+    (org-mode)
+    (insert text)
+    (org-change-mode 1)
+    (goto-char pos)
+    (if accept (org-change-accept) (org-change-reject))
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(ert-deftest org-change-test-accept-joins-spaces-around-a-deletion ()
+  "Accepting a deletion selected without its spaces leaves one space."
+  (should (equal (org-change-tests--apply-at "the {!!}{!quick!} brown" 7 t)
+		 "the brown")))
+
+(ert-deftest org-change-test-reject-joins-spaces-around-an-addition ()
+  "Rejecting an addition selected without its spaces leaves one space."
+  (should (equal (org-change-tests--apply-at "the {!quick!}{!!} brown" 7 nil)
+		 "the brown")))
+
+(ert-deftest org-change-test-accept-drops-an-abandoned-placeholder-space ()
+  "The space `org-change-replace' leaves for typing must not survive.
+Moving point away abandons the placeholder, so the space stays in
+the markup; accepting it would otherwise triple the space."
+  (should (equal (org-change-tests--apply-at "the {! !}{!quick!} brown" 7 t)
+		 "the brown")))
+
+(ert-deftest org-change-test-accept-keeps-indentation ()
+  "A run of spaces the change did not create is left alone.
+Only spaces that end up next to each other because of the accept
+are joined, so indentation survives."
+  (should (equal (org-change-tests--apply-at "   {!new!}{!old!} x" 6 t)
+		 "   new x")))
+
+(ert-deftest org-change-test-accept-keeps-a-space-run-inside-the-new-text ()
+  "Spaces written inside a change are the author's, and are kept."
+  (should (equal (org-change-tests--apply-at "a {!x  y!}{!z!} b" 6 t)
+		 "a x  y b")))
+
+(ert-deftest org-change-test-region-accept-joins-spaces ()
+  "Joining spaces also happens when accepting over a region."
+  (should (equal (org-change-tests--over-region
+		  "the {!!}{!quick!} brown {!!}{!red!} fox"
+		  1 40 #'org-change-accept)
+		 "the brown fox")))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
