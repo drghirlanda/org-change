@@ -1133,6 +1133,48 @@ are joined, so indentation survives."
 		  1 40 #'org-change-accept)
 		 "the brown fox")))
 
+;;; Newlines left behind by accepting or rejecting
+
+(ert-deftest org-change-test-accept-closes-the-gap-left-by-a-deleted-line ()
+  "Deleting a line without its newlines must not leave an empty line."
+  (should (equal (org-change-tests--apply-at "a\n{!!}{!b!}\nc" 5 t)
+		 "a\nc")))
+
+(ert-deftest org-change-test-reject-closes-the-gap-left-by-an-added-line ()
+  "Rejecting an added line must not leave an empty line either."
+  (should (equal (org-change-tests--apply-at "a\n{!b!}{!!}\nc" 5 nil)
+		 "a\nc")))
+
+(ert-deftest org-change-test-accept-keeps-the-paragraph-break ()
+  "Deleting a paragraph leaves one blank line, not two."
+  (should (equal (org-change-tests--apply-at "p1\n\n{!!}{!p2!}\n\np3" 8 t)
+		 "p1\n\np3")))
+
+(ert-deftest org-change-test-accept-keeps-the-wider-of-the-two-gaps ()
+  "The larger of the two gaps wins: a paragraph break outranks a newline."
+  (should (equal (org-change-tests--apply-at "a\n{!!}{!b!}\n\nc" 5 t)
+		 "a\n\nc")))
+
+(ert-deftest org-change-test-accept-keeps-indentation-of-the-next-line ()
+  "Closing a gap keeps the indentation the following line carries."
+  (should (equal (org-change-tests--apply-at
+		  "def f():\n    a\n    {!!}{!b!}\n    c" 24 t)
+		 "def f():\n    a\n    c")))
+
+(ert-deftest org-change-test-accept-keeps-blank-lines-inside-a-change ()
+  "Blank lines written inside a change are the author's, and are kept."
+  (should (equal (org-change-tests--apply-at "a\n{!x\n\ny!}{!z!}\nb" 5 t)
+		 "a\nx\n\ny\nb")))
+
+(ert-deftest org-change-test-accept-after-a-join-finds-the-next-change ()
+  "Closing a gap must not make the region loop step over what follows.
+Here the gap kept is shorter than the one dropped, so the position
+the loop resumes from moves; a stale position would skip the second
+change."
+  (should (equal (org-change-tests--over-region
+		  "a   {!!}{!b!}\n{!!}{!c!}d" 1 25 #'org-change-accept)
+		 "a\nd")))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

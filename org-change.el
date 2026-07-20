@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.10.4
+;; Version: 0.10.5
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -601,7 +601,7 @@ Also sets match data for `org-change--regexp'."
 Point does not move: if it was inside the change, it is put back on
 the same spot of the text that replaces it.  Where the two sides of
 the change come together, a doubled space is reduced to one, as
-`org-change--join-spaces' explains.  Return the position just after
+`org-change--join-whitespace' explains.  Return the position just after
 the text that replaces the change, or nil if there was no change at
 point."
   (let ((change-position (org-change--at-change))
@@ -631,29 +631,62 @@ point."
 	  (goto-char (+ beg offset)))
 	;; Join the two seams, the later one first so that the earlier
 	;; position stays valid.  `stop' has to be a marker across the join
-	;; at `beg', which can delete text before it.
+	;; at `beg', which can delete text before it.  When the change left
+	;; no text behind, the two seams are one, and joining it twice would
+	;; eat a gap that belongs to the text.
 	(let ((stop-marker (copy-marker stop t)))
-	  (org-change--join-spaces stop)
-	  (org-change--join-spaces beg)
+	  (org-change--join-whitespace stop)
+	  (unless (= stop beg)
+	    (org-change--join-whitespace beg))
 	  (setq stop (marker-position stop-marker))
 	  (set-marker stop-marker nil))
 	stop))))
 
-(defun org-change--join-spaces (pos)
-  "Collapse to one the run of spaces the text at POS was joined into.
-POS is a seam left by accepting or rejecting: what is before it
-and what is after it used to be separated by change markup.  When
-both sides carry a space, the two are now next to each other, and
-the run is reduced to a single space.  When only one side does,
-there is nothing to join, so indentation, and runs the author
-wrote inside a change, are left alone."
+(defconst org-change--whitespace " \t\n"
+  "The characters `org-change--join-whitespace' treats as a gap.")
+
+(defun org-change--join-whitespace (pos)
+  "Close the gap that accepting or rejecting opened at POS.
+POS is a seam: what is before it and what is after it used to be
+separated by change markup, and each side may end or begin with
+whitespace of its own.  Once the markup is gone the two runs sit
+next to each other, so one of them has to go: deleting a word
+without its spaces would otherwise leave a double space, and
+deleting a line without its newlines an empty line.  The wider run
+is the one kept, so that a paragraph break survives next to a plain
+newline, and the narrower one is deleted.
+
+When only one side carries whitespace nothing was joined and the
+text is left alone, which is what keeps indentation, and the runs
+an author wrote inside a change, intact."
   (save-excursion
     (goto-char pos)
-    (when (and (eq (char-before) ?\s) (eq (char-after) ?\s))
-      (skip-chars-backward " ")
-      (let ((from (point)))
-	(skip-chars-forward " ")
-	(delete-region (1+ from) (point))))))
+    (let (before-start after-end)
+      (skip-chars-backward org-change--whitespace)
+      (setq before-start (point))
+      (goto-char pos)
+      (skip-chars-forward org-change--whitespace)
+      (setq after-end (point))
+      (when (and (< before-start pos) (< pos after-end))
+	(if (org-change--wider-gap-p
+	     (buffer-substring-no-properties before-start pos)
+	     (buffer-substring-no-properties pos after-end))
+	    (delete-region pos after-end)
+	  (delete-region before-start pos))))))
+
+(defun org-change--newlines (string)
+  "Return the number of newlines in STRING."
+  (- (length string) (length (string-replace "\n" "" string))))
+
+(defun org-change--wider-gap-p (a b)
+  "Return non-nil if the gap A is at least as wide as the gap B.
+Width is the number of newlines first -- a paragraph break is wider
+than a line break, which is wider than a space -- and the length of
+the run to settle a tie."
+  (let ((na (org-change--newlines a))
+	(nb (org-change--newlines b)))
+    (or (> na nb)
+	(and (= na nb) (>= (length a) (length b))))))
 
 (defun org-change--apply-region (accept rbeg rend)
   "Accept or reject the changes between RBEG and REND.
