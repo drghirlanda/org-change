@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.10.5
+;; Version: 0.11.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -32,7 +32,8 @@
 ;; on a change with org-change-comment (C-` c).  Move between changes
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Count them with
-;; org-change-info (C-` i).  Press C-` h for a summary of the key
+;; org-change-info (C-` i), or list them in a side window with
+;; org-change-overview (C-` o).  Press C-` h for a summary of the key
 ;; bindings.  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX and HTML export are available.  To change
@@ -151,6 +152,11 @@ export."
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-overview-key (kbd "C-` o")
+  "Keybinding for `org-change-overview'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-info-key (kbd "C-` i")
   "Keybinding for `org-change-info'."
   :type 'key-sequence
@@ -174,6 +180,16 @@ export."
 (defface org-change-comment-face
   '((t (:slant italic)))
   "Face for the comment shown after a change."
+  :group 'org-change)
+
+(defcustom org-change-overview-width 40
+  "Width, in columns, of the side window `org-change-overview' opens."
+  :type 'integer
+  :group 'org-change)
+
+(defcustom org-change-overview-side 'right
+  "Side of the frame `org-change-overview' opens its window on."
+  :type '(choice (const left) (const right) (const top) (const bottom))
   :group 'org-change)
 
 (defcustom org-change-face 'org-change-link-face
@@ -944,6 +960,7 @@ time."
     (org-change-comment-key . "Add or edit the change's comment")
     (org-change-next-key . "Go to the next change")
     (org-change-previous-key . "Go to the previous change")
+    (org-change-overview-key . "List every change in a side window")
     (org-change-info-key . "Report the number of additions, deletions, replacements")
     (org-change-fontify-key . "Re-fontify the buffer")
     (org-change-help-key . "Show this help"))
@@ -965,6 +982,156 @@ time."
     (princ "Org Change key bindings:\n\n")
     (princ (org-change--help-string))
     (princ "\n")))
+
+;;; Overview of the changes in a side window
+
+(defvar org-change-overview-buffer-name "*Org Change Overview*"
+  "Name of the buffer listing the changes of another buffer.")
+
+(defvar-local org-change-overview--source nil
+  "The buffer whose changes the overview lists.")
+
+(defun org-change--change-summary ()
+  "Return a one-line description of the change just matched.
+Uses the match data of `org-change--regexp', so it has to be called
+right after a search.  A deletion has no new text to show, so its
+old text is shown behind `org-change-deleted-marker' instead."
+  (let* ((new (org-change--decode (match-string-no-properties 1)))
+	 (old (org-change--decode (match-string-no-properties 2)))
+	 (text (if (equal new "")
+		   (concat org-change-deleted-marker old)
+		 new))
+	 (line (car (split-string text "\n"))))
+    (if (string-empty-p (string-trim line))
+	"(empty)"
+      (string-trim line))))
+
+(defun org-change--overview-entries (buffer)
+  "Return one entry per change in BUFFER, in order.
+An entry is a list (MARKER LINE SUMMARY): where the change starts,
+the line it is on, and a one-line description of it."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((entries nil))
+	(while (org-change--search-forward nil t)
+	  (let* ((beg (match-beginning 0))
+		 ;; Before anything that could clobber the match data.
+		 (summary (org-change--change-summary)))
+	    (push (list (copy-marker beg) (line-number-at-pos beg) summary)
+		  entries)))
+	(nreverse entries)))))
+
+(defun org-change-overview--render ()
+  "Fill the overview buffer from the changes of its source.
+Point stays on the line it was on, so that accepting or rejecting
+a change leaves the cursor on the one that takes its place."
+  (let* ((source org-change-overview--source)
+	 (entries (and (buffer-live-p source)
+		       (org-change--overview-entries source)))
+	 (line (line-number-at-pos))
+	 (inhibit-read-only t))
+    (erase-buffer)
+    (if (null entries)
+	(insert "No changes")
+      (dolist (entry entries)
+	(let ((start (point)))
+	  (insert (format "%4d  %s\n" (nth 1 entry) (nth 2 entry)))
+	  (put-text-property start (point) 'org-change-marker (car entry)))))
+    (goto-char (point-min))
+    (forward-line (1- line))
+    ;; The last line may have gone: do not sit past the end of the list.
+    (when (and (eobp) (not (bobp)))
+      (forward-line -1))
+    (set-buffer-modified-p nil)))
+
+(defun org-change-overview--marker ()
+  "Return the marker of the change listed on this line."
+  (or (get-text-property (line-beginning-position) 'org-change-marker)
+      (user-error "No change on this line")))
+
+(defun org-change-overview--source-window ()
+  "Return a window showing the source buffer, displaying it if need be."
+  (let ((source org-change-overview--source))
+    (unless (buffer-live-p source)
+      (user-error "The buffer this overview describes is gone"))
+    (or (get-buffer-window source)
+	(display-buffer source '(nil (inhibit-same-window . t))))))
+
+(defun org-change-overview-goto ()
+  "Go to the change listed on this line, in the buffer it belongs to."
+  (interactive)
+  (let ((marker (org-change-overview--marker))
+	(window (org-change-overview--source-window)))
+    (select-window window)
+    (org-change--goto-change (marker-position marker))))
+
+(defun org-change-overview--apply (accept)
+  "Accept or reject the change listed on this line, in its own buffer.
+ACCEPT is as in `org-change--apply-change'.  The overview is
+refreshed, and the cursor stays put, so it ends up on the change
+that moves into the place of the one just dealt with."
+  (let ((marker (org-change-overview--marker))
+	(source org-change-overview--source))
+    (unless (buffer-live-p source)
+      (user-error "The buffer this overview describes is gone"))
+    (with-current-buffer source
+      (save-excursion
+	(goto-char marker)
+	(org-change--apply-change accept)))
+    (org-change-overview--render)
+    (message "Change %s" (if accept "accepted" "rejected"))))
+
+(defun org-change-overview-accept ()
+  "Accept the change listed on this line, in the buffer it belongs to."
+  (interactive)
+  (org-change-overview--apply t))
+
+(defun org-change-overview-reject ()
+  "Reject the change listed on this line, in the buffer it belongs to."
+  (interactive)
+  (org-change-overview--apply nil))
+
+(defvar org-change-overview-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "RET") #'org-change-overview-goto)
+    (define-key map org-change-accept-key #'org-change-overview-accept)
+    (define-key map org-change-reject-key #'org-change-overview-reject)
+    map)
+  "Keymap of `org-change-overview-mode'.
+Inherits `special-mode-map', which is where `q' and the usual
+scrolling keys come from.")
+
+(define-derived-mode org-change-overview-mode special-mode "Org Change"
+  "Major mode for the buffer listing the changes of another buffer.
+
+Move with the arrow keys, press \\[org-change-overview-goto] to go
+to the change on this line, and \\[quit-window] to close the
+window.  The accept and reject keys work as they do in the text
+itself, on the change listed on this line."
+  (setq truncate-lines t)
+  (setq-local revert-buffer-function
+	      (lambda (&rest _) (org-change-overview--render))))
+
+(defun org-change-overview ()
+  "List every change of this buffer, one line each, in a side window.
+The window is selected, so you can move through the changes right
+away.  See `org-change-overview-mode' for what the keys do."
+  (interactive)
+  (let ((source (current-buffer))
+	(buffer (get-buffer-create org-change-overview-buffer-name)))
+    (with-current-buffer buffer
+      (unless (derived-mode-p 'org-change-overview-mode)
+	(org-change-overview-mode))
+      ;; After the mode: turning it on kills the buffer-local variables.
+      (setq org-change-overview--source source)
+      (org-change-overview--render))
+    (select-window
+     (display-buffer buffer
+		     `((display-buffer-in-side-window)
+		       (side . ,org-change-overview-side)
+		       (window-width . ,org-change-overview-width))))))
 
 ;;; Counting changes
 
@@ -1393,6 +1560,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-comment-key #'org-change-comment)
             (define-key map org-change-next-key #'org-change-next-change)
             (define-key map org-change-previous-key #'org-change-previous-change)
+            (define-key map org-change-overview-key #'org-change-overview)
             (define-key map org-change-info-key #'org-change-info)
             (define-key map org-change-help-key #'org-change-help)
             map)

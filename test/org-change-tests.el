@@ -1175,6 +1175,124 @@ change."
 		  "a   {!!}{!b!}\n{!!}{!c!}d" 1 25 #'org-change-accept)
 		 "a\nd")))
 
+;;; The overview side window
+
+(defmacro org-change-tests--with-overview (text &rest body)
+  "Insert TEXT in a buffer, open its overview, and run BODY there.
+Inside BODY, `source' is the buffer holding TEXT, and the current
+buffer is the overview.  Both buffers, and the window the overview
+opened, are gone afterwards."
+  (declare (indent 1))
+  `(let ((source (generate-new-buffer " *org-change-test-source*")))
+     (unwind-protect
+	 (save-window-excursion
+	   (with-current-buffer source
+	     (org-mode)
+	     (insert ,text)
+	     (org-change-mode 1)
+	     (goto-char (point-min))
+	     (org-change-overview))
+	   (with-current-buffer org-change-overview-buffer-name
+	     ,@body))
+       (kill-buffer source)
+       (when (get-buffer org-change-overview-buffer-name)
+	 (kill-buffer org-change-overview-buffer-name)))))
+
+(defun org-change-tests--overview-lines ()
+  "Return the overview's lines, without their line numbers."
+  (mapcar (lambda (line) (string-trim (substring line (min 6 (length line)))))
+	  (split-string (buffer-substring-no-properties (point-min) (point-max))
+			"\n" t)))
+
+(ert-deftest org-change-test-overview-lists-every-change ()
+  "The overview shows one line per change, in buffer order."
+  (org-change-tests--with-overview
+      "a {!new one!}{!old one!} b\n{!added!}{!!}\n{!!}{!dropped!}\n"
+    (should (equal (org-change-tests--overview-lines)
+		   (list "new one" "added" "✗dropped")))))
+
+(ert-deftest org-change-test-overview-shows-the-first-line-only ()
+  "A change spanning several lines is summarized by its first line."
+  (org-change-tests--with-overview "{!first\nsecond\nthird!}{!!}"
+    (should (equal (org-change-tests--overview-lines) '("first")))))
+
+(ert-deftest org-change-test-overview-gives-the-line-of-each-change ()
+  "Each entry is prefixed with the line the change is on."
+  (org-change-tests--with-overview "one\n\n{!two!}{!!}\n{!three!}{!!}"
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max))
+				 "\n" t)
+		   '("   3  two" "   4  three")))))
+
+(ert-deftest org-change-test-overview-says-when-there-is-nothing ()
+  "A buffer without changes gets an overview that says so."
+  (org-change-tests--with-overview "nothing to see here"
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "No changes"))))
+
+(ert-deftest org-change-test-overview-jumps-to-the-change ()
+  "RET moves point in the source buffer to the change on this line."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (forward-line 1)			; the second change
+    (org-change-overview-goto)
+    (should (eq (current-buffer) source))
+    (should (equal (org-change--at-change) (cons 16 26)))))
+
+(ert-deftest org-change-test-overview-accepts-in-the-source-buffer ()
+  "The accept key acts on the change in the buffer being reviewed."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (org-change-overview-accept)
+    (should (equal (with-current-buffer source
+		     (buffer-substring-no-properties (point-min) (point-max)))
+		   "a x b {!p!}{!q!} c"))))
+
+(ert-deftest org-change-test-overview-rejects-in-the-source-buffer ()
+  "The reject key acts on the change in the buffer being reviewed."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (org-change-overview-reject)
+    (should (equal (with-current-buffer source
+		     (buffer-substring-no-properties (point-min) (point-max)))
+		   "a y b {!p!}{!q!} c"))))
+
+(ert-deftest org-change-test-overview-refreshes-after-accepting ()
+  "The dealt-with change leaves the list, and the cursor stays put.
+The next change moves up into its place, so accepting repeatedly
+works down the list without having to move."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (org-change-overview-accept)
+    (should (equal (org-change-tests--overview-lines) '("p")))
+    (should (= (line-number-at-pos) 1))
+    (org-change-overview-accept)
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "No changes"))
+    (should (equal (with-current-buffer source
+		     (buffer-substring-no-properties (point-min) (point-max)))
+		   "a x b p c"))))
+
+(ert-deftest org-change-test-overview-keeps-the-source-point-put ()
+  "Reviewing from the overview does not move point in the source buffer."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (with-current-buffer source (goto-char (point-max)))
+    (org-change-overview-accept)
+    (should (= (with-current-buffer source (point))
+	       (with-current-buffer source (point-max))))))
+
+(ert-deftest org-change-test-overview-opens-a-side-window ()
+  "The overview is shown in a side window, which `q' closes."
+  (org-change-tests--with-overview "a {!x!}{!y!} b"
+    (let ((window (get-buffer-window (current-buffer))))
+      (should window)
+      (should (window-parameter window 'window-side))
+      (should (eq (selected-window) window))
+      (quit-window)
+      (should-not (get-buffer-window org-change-overview-buffer-name)))))
+
+(ert-deftest org-change-test-overview-survives-a-dead-source ()
+  "With the buffer it describes gone, the overview says so rather than fails."
+  (org-change-tests--with-overview "a {!x!}{!y!} b"
+    (kill-buffer source)
+    (should-error (org-change-overview-accept) :type 'user-error)))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

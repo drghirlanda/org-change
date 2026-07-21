@@ -77,6 +77,16 @@ To jump from change to change, use:
 - ~C-` p~ :: move to the previous change.
 Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it.
 
+** A bird's eye view of the changes
+
+Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). The window is selected right away, so you can start moving through the list. In it:
+- ~up~ / ~down~ :: move from change to change.
+- ~RET~ :: go to the change on this line, in the buffer being reviewed.
+- ~C-` k~ / ~C-` x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and point there does not move.
+- ~g~ :: refresh the list, if you have edited the buffer since opening it.
+- ~q~ :: close the window.
+Accepting or rejecting from the list refreshes it and leaves the cursor where it is, so the next change moves up into place: you can work down a document without moving at all. The width and the side of the frame the window opens on are ~org-change-overview-width~ and ~org-change-overview-side~.
+
 ** Counting changes
 
 Press ~C-` i~ to show, in the minibuffer, how many additions, deletions, and replacements the document contains, for example "3 additions, 2 deletions, 1 replacement".
