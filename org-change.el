@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.11.0
+;; Version: 0.11.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -36,7 +36,8 @@
 ;; org-change-overview (C-` o).  Press C-` h for a summary of the key
 ;; bindings.  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
-;; used in org-mode, LaTeX and HTML export are available.  To change
+;; used in org-mode, LaTeX, HTML, and plain text export are
+;; available.  To change
 ;; key bindings and other settings, run M-x customize-group RET
 ;; org-change.  More information at the package URL.
 
@@ -748,7 +749,8 @@ on."
 (defun org-change--accept-or-reject (accept)
   "Accept (ACCEPT is t) or reject (ACCEPT is nil) changes.
 With an active region, act on every change inside it, and on no
-other; otherwise act on the change at point."
+other; otherwise act on the change at point.  An overview open on
+this buffer is refreshed, so it never lists a change that is gone."
   (if (use-region-p)
       (let ((count (org-change--apply-region
 		    accept (region-beginning) (region-end))))
@@ -758,7 +760,8 @@ other; otherwise act on the change at point."
 		 (if (= count 1) "" "s")
 		 (if accept "accepted" "rejected")))
     (unless (org-change--apply-change accept)
-      (message "No change at point"))))
+      (message "No change at point")))
+  (org-change--overview-update))
 
 (defun org-change-accept ()
   "Accept the change at point, or every change in the active region."
@@ -815,7 +818,8 @@ otherwise process the whole buffer."
 	   (t
 	    (goto-char (match-beginning 0))))))
       (set-marker end nil)
-      (deactivate-mark)))
+      (deactivate-mark)
+      (org-change--overview-update)))
   (message "No more changes"))
 
 ;;; Comments
@@ -1025,11 +1029,15 @@ the line it is on, and a one-line description of it."
 (defun org-change-overview--render ()
   "Fill the overview buffer from the changes of its source.
 Point stays on the line it was on, so that accepting or rejecting
-a change leaves the cursor on the one that takes its place."
+a change leaves the cursor on the one that takes its place.  The
+window showing the overview is what point is read from and written
+back to: refreshing from the other buffer must not lose the place
+the cursor holds on screen."
   (let* ((source org-change-overview--source)
 	 (entries (and (buffer-live-p source)
 		       (org-change--overview-entries source)))
-	 (line (line-number-at-pos))
+	 (window (get-buffer-window (current-buffer) t))
+	 (line (line-number-at-pos (if window (window-point window) (point))))
 	 (inhibit-read-only t))
     (erase-buffer)
     (if (null entries)
@@ -1043,7 +1051,20 @@ a change leaves the cursor on the one that takes its place."
     ;; The last line may have gone: do not sit past the end of the list.
     (when (and (eobp) (not (bobp)))
       (forward-line -1))
+    (when window
+      (set-window-point window (point)))
     (set-buffer-modified-p nil)))
+
+(defun org-change--overview-update ()
+  "Refresh the overview, if one is open on this buffer.
+Accepting or rejecting in the text itself would otherwise leave the
+list showing a change that is no longer there."
+  (let ((buffer (get-buffer org-change-overview-buffer-name))
+	(source (current-buffer)))
+    (when (and buffer (not (eq buffer source)))
+      (with-current-buffer buffer
+	(when (eq org-change-overview--source source)
+	  (org-change-overview--render))))))
 
 (defun org-change-overview--marker ()
   "Return the marker of the change listed on this line."
@@ -1092,24 +1113,40 @@ that moves into the place of the one just dealt with."
   (interactive)
   (org-change-overview--apply nil))
 
+(defun org-change--bare-key (key)
+  "Return the last event of KEY on its own, as a key sequence.
+The overview needs no prefix -- there is nothing to type there --
+so `C-` k\=' also answers to plain `k\='.  Taking the last event
+rather than a fixed letter keeps that true when the bindings are
+customized."
+  (let ((events (listify-key-sequence key)))
+    (and events (vector (car (last events))))))
+
 (defvar org-change-overview-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "RET") #'org-change-overview-goto)
-    (define-key map org-change-accept-key #'org-change-overview-accept)
-    (define-key map org-change-reject-key #'org-change-overview-reject)
+    (dolist (row `((,org-change-accept-key . org-change-overview-accept)
+		   (,org-change-reject-key . org-change-overview-reject)))
+      (define-key map (car row) (cdr row))
+      (let ((bare (org-change--bare-key (car row))))
+	(when bare
+	  (define-key map bare (cdr row)))))
     map)
   "Keymap of `org-change-overview-mode'.
-Inherits `special-mode-map', which is where `q' and the usual
-scrolling keys come from.")
+Inherits `special-mode-map', which is where `q\=' and the usual
+scrolling keys come from.  The accept and reject keys are bound
+both as they are in the text and without their prefix.")
 
 (define-derived-mode org-change-overview-mode special-mode "Org Change"
   "Major mode for the buffer listing the changes of another buffer.
 
 Move with the arrow keys, press \\[org-change-overview-goto] to go
-to the change on this line, and \\[quit-window] to close the
-window.  The accept and reject keys work as they do in the text
-itself, on the change listed on this line."
+to the change on this line, \\[revert-buffer] to refresh the list,
+and \\[quit-window] to close the window.  The accept and reject
+keys act on the change listed on this line, in the buffer being
+reviewed; there is nothing to type here, so they work without their
+prefix as well."
   (setq truncate-lines t)
   (setq-local revert-buffer-function
 	      (lambda (&rest _) (org-change-overview--render))))
@@ -1456,9 +1493,37 @@ verbatim."
 				       "org-change-comment" note)))
 		    (org-change--make-span deleted old-text)))))))
 
+(defun org-change--export-ascii (old-text new-text comment)
+  "Export a change to plain text, as CriticMarkup.
+OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change: an
+addition becomes `{++new++}\=', a deletion `{--old--}\=', and a
+replacement `{~~old~>new~~}\='.  A comment follows as `{>>note<<}\=',
+carrying the author of an @ID prefix as `{>>ID: note<<}\=', which is
+how Emacs shows it.  The result is wrapped in @@ascii:...@@ so org
+exports it verbatim, without reading the markup as org syntax."
+  (let* ((split (org-change--split-comment comment))
+	 (author (car split))
+	 (note (cdr split))
+	 (text (cond ((equal old-text "")
+		      (format "{++%s++}" new-text))
+		     ((equal new-text "")
+		      (format "{--%s--}" old-text))
+		     (t
+		      (format "{~~%s~>%s~~}" old-text new-text)))))
+    (format "@@ascii:%s%s@@"
+	    text
+	    (if (equal note "")
+		""
+	      (format "{>>%s%s<<}"
+		      (if (or (null author) (equal author ""))
+			  ""
+			(concat author ": "))
+		      note)))))
+
 (defvar org-change--exporters
   '((latex . org-change--export-latex)
-    (html . org-change--export-html))
+    (html . org-change--export-html)
+    (ascii . org-change--export-ascii))
   "List of exporters known to Org Change.")
 
 (defun org-change-add-export-backend (backend exporter)

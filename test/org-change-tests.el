@@ -1293,6 +1293,121 @@ works down the list without having to move."
     (kill-buffer source)
     (should-error (org-change-overview-accept) :type 'user-error)))
 
+(ert-deftest org-change-test-overview-follows-the-source-buffer ()
+  "Accepting in the text refreshes the list, which no longer shows it."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (with-current-buffer source
+      (goto-char 4)
+      (org-change-accept))
+    (should (equal (org-change-tests--overview-lines) '("p")))))
+
+(ert-deftest org-change-test-overview-follows-a-region-accept ()
+  "Accepting a whole region in the text refreshes the list too."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (with-current-buffer source
+      (org-change-tests--mark-region (point-min) (point-max))
+      (org-change-accept))
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "No changes"))))
+
+(ert-deftest org-change-test-overview-refresh-keeps-the-cursor-line ()
+  "A refresh from the other buffer leaves the cursor where it was."
+  (org-change-tests--with-overview
+      "a {!x!}{!y!} b {!p!}{!q!} c {!m!}{!n!} d"
+    (forward-line 2)			; the third change
+    (with-current-buffer source
+      (goto-char 4)			; accept the first
+      (org-change-accept))
+    (should (equal (org-change-tests--overview-lines) '("p" "m")))
+    ;; Line 3 is gone with the change that was on line 1, so the cursor
+    ;; sits on the last line rather than past the end of the list.
+    (should (= (line-number-at-pos) 2))))
+
+(ert-deftest org-change-test-overview-accepts-without-the-prefix ()
+  "The accept and reject keys work bare in the overview.
+There is nothing to type there, so the prefix is not needed."
+  (org-change-tests--with-overview "a {!x!}{!y!} b"
+    (should (eq (key-binding (org-change--bare-key org-change-accept-key))
+		#'org-change-overview-accept))
+    (should (eq (key-binding (org-change--bare-key org-change-reject-key))
+		#'org-change-overview-reject))
+    ;; and the full sequences still work
+    (should (eq (key-binding org-change-accept-key)
+		#'org-change-overview-accept))))
+
+(ert-deftest org-change-test-bare-key-takes-the-last-event ()
+  "The bare binding follows a customized key rather than a fixed letter."
+  (should (equal (key-description (org-change--bare-key (kbd "C-` k"))) "k"))
+  (should (equal (key-description (org-change--bare-key (kbd "C-c C-v"))) "C-v"))
+  (should-not (org-change--bare-key "")))
+
+;;; Plain text export
+
+(defun org-change-tests--ascii (text)
+  "Return TEXT with its change markup rewritten for plain text export."
+  (with-temp-buffer
+    (insert text)
+    (org-change--before-processing 'ascii)
+    (buffer-string)))
+
+(ert-deftest org-change-test-ascii-exports-an-addition ()
+  "An addition becomes CriticMarkup's insertion."
+  (should (equal (org-change-tests--ascii "a {!new!}{!!} b")
+		 "a @@ascii:{++new++}@@ b")))
+
+(ert-deftest org-change-test-ascii-exports-a-deletion ()
+  "A deletion becomes CriticMarkup's deletion."
+  (should (equal (org-change-tests--ascii "a {!!}{!gone!} b")
+		 "a @@ascii:{--gone--}@@ b")))
+
+(ert-deftest org-change-test-ascii-exports-a-replacement ()
+  "A replacement becomes CriticMarkup's substitution, old text first."
+  (should (equal (org-change-tests--ascii "a {!new!}{!old!} b")
+		 "a @@ascii:{~~old~>new~~}@@ b")))
+
+(ert-deftest org-change-test-ascii-exports-a-comment ()
+  "A comment follows the change as CriticMarkup's comment."
+  (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!a note!} b")
+		 "a @@ascii:{~~old~>new~~}{>>a note<<}@@ b")))
+
+(ert-deftest org-change-test-ascii-exports-the-author-of-a-comment ()
+  "An @ID prefix names the author, as it does on screen."
+  (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!@SG a note!} b")
+		 "a @@ascii:{~~old~>new~~}{>>SG: a note<<}@@ b")))
+
+(ert-deftest org-change-test-ascii-exports-an-author-without-a-comment ()
+  "An author alone still shows, with nothing after the colon to say."
+  (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!@SG!} b")
+		 "a @@ascii:{~~old~>new~~}@@ b")))
+
+(ert-deftest org-change-test-ascii-decodes-escaped-delimiters ()
+  "The escaping of the org-change delimiters is undone on export."
+  (should (equal (org-change-tests--ascii "{!!}{!a!\\}b!}")
+		 "@@ascii:{--a!}b--}@@")))
+
+(ert-deftest org-change-test-ascii-export-runs-end-to-end ()
+  "A document exports to plain text with its changes marked up."
+  (require 'ox-ascii)
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "Some {!new!}{!old!} text and an {!added!}{!!} word.\n")
+    (should (equal (org-export-as 'ascii nil nil t)
+		   (concat "Some {~~old~>new~~} text and an {++added++} word.\n")))))
+
+(ert-deftest org-change-test-ascii-final-export-drops-the-markup ()
+  "With `org-change-final' set, plain text export gives a clean document."
+  (require 'ox-ascii)
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "Some {!new!}{!old!} text and a {!!}{!dropped!} word.\n")
+    (let ((org-change-final t))
+      ;; Org fills the text on export, so the gap the deletion leaves
+      ;; closes by itself.
+      (should (equal (org-export-as 'ascii nil nil t)
+		     "Some new text and a word.\n")))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

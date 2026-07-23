@@ -15,7 +15,7 @@ If you have files using the old link syntax, you can convert them automatically 
 org-change is an Emacs minor mode that provides a simple "track changes" feature similar to some word processors. It works in any major mode, not just org-mode. The main use case is for authors to highlight changes between two versions of a document, such as before and after a round of review. For this, org-change provides:
 - A custom markup syntax to mark additions, deletions, and replacements.
 - Functions and key bindings to manipulate change markup.
-- When used in org-mode, export filters for change markup (currently LaTeX and HTML).
+- When used in org-mode, export filters for change markup (currently LaTeX, HTML, and plain text).
 
 * Installation
 
@@ -82,10 +82,10 @@ Point lands at the beginning of the change. If point is inside a change, these m
 Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). The window is selected right away, so you can start moving through the list. In it:
 - ~up~ / ~down~ :: move from change to change.
 - ~RET~ :: go to the change on this line, in the buffer being reviewed.
-- ~C-` k~ / ~C-` x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and point there does not move.
+- ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and point there does not move. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
 - ~g~ :: refresh the list, if you have edited the buffer since opening it.
 - ~q~ :: close the window.
-Accepting or rejecting from the list refreshes it and leaves the cursor where it is, so the next change moves up into place: you can work down a document without moving at all. The width and the side of the frame the window opens on are ~org-change-overview-width~ and ~org-change-overview-side~.
+Accepting or rejecting from the list refreshes it and leaves the cursor where it is, so the next change moves up into place: you can work down a document without moving at all. The list also keeps up with the buffer itself: accepting or rejecting there, whether one change or a whole region, refreshes it, so it never shows a change that is gone. It does not follow other edits, so press ~g~ after adding changes. The width and the side of the frame the window opens on are ~org-change-overview-width~ and ~org-change-overview-side~.
 
 ** Counting changes
 
@@ -217,6 +217,17 @@ becomes this:
 </span>
 #+end_example
 You can then use CSS to display these classes as desired.
+
+** Plain text export
+
+Exporting to plain text (the ~ascii~ backend, and the UTF-8 and Latin-1 variants of it) marks changes up as [[https://fletcher.github.io/MultiMarkdown-6/CRITIC.html][CriticMarkup]], the usual convention for tracked changes in plain text:
+| change      | org-change                 | plain text          |
+|-------------+----------------------------+---------------------|
+| addition    | ={!new!}{!!}=              | ={++new++}=         |
+| deletion    | ={!!}{!old!}=              | ={--old--}=         |
+| replacement | ={!new!}{!old!}=           | ={~~old~>new~~}=    |
+| comment     | ={!new!}{!old!}{!a note!}= | ={>>a note<<}=      |
+A comment follows the change it belongs to, and an ~@ID~ author prefix is shown before it as ~{>>SG: a note<<}~, the way Emacs shows it on screen.
 
 ** Producing a clean document
 
