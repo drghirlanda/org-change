@@ -1517,6 +1517,34 @@ There is nothing to type there, so the prefix is not needed."
   "Choosing No author clears the author."
   (should-not (org-change-tests--set-author-with "No author")))
 
+;;; Author column in the overview
+
+(ert-deftest org-change-test-overview-shows-authors ()
+  "The overview names the author of each change, blank when there is none."
+  (org-change-tests--with-overview
+      "{!a!}{!!}{!@SG!}\n{!b!}{!!}{!@MR note!}\n{!c!}{!!}"
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max))
+				 "\n" t)
+		   '("   1  SG  a" "   2  MR  b" "   3      c")))))
+
+(ert-deftest org-change-test-overview-has-no-author-column-without-authors ()
+  "With no attributed change, the list has no author column at all."
+  (org-change-tests--with-overview "{!a!}{!!}\n{!b!}{!!}"
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max))
+				 "\n" t)
+		   '("   1  a" "   2  b")))))
+
+(ert-deftest org-change-test-overview-colors-the-author ()
+  "The author id carries that author's face."
+  (let ((org-change-authors '(("SG" :name "Stefano" :color "blue"))))
+    (org-change-tests--with-overview "{!a!}{!!}{!@SG!}"
+      (goto-char (point-min))
+      (search-forward "SG")
+      (should (equal (get-text-property (match-beginning 0) 'face)
+		     (org-change--change-face "SG"))))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

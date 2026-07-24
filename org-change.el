@@ -1091,9 +1091,11 @@ the line it is on, and a one-line description of it."
       (let ((entries nil))
 	(while (org-change--search-forward nil t)
 	  (let* ((beg (match-beginning 0))
-		 ;; Before anything that could clobber the match data.
+		 ;; Author before summary: `--change-author' saves the match
+		 ;; data, so `--change-summary' still sees this change.
+		 (author (org-change--change-author))
 		 (summary (org-change--change-summary)))
-	    (push (list (copy-marker beg) (line-number-at-pos beg) summary)
+	    (push (list (copy-marker beg) (line-number-at-pos beg) summary author)
 		  entries)))
 	(nreverse entries)))))
 
@@ -1113,10 +1115,21 @@ the cursor holds on screen."
     (erase-buffer)
     (if (null entries)
 	(insert "No changes")
-      (dolist (entry entries)
-	(let ((start (point)))
-	  (insert (format "%4d  %s\n" (nth 1 entry) (nth 2 entry)))
-	  (put-text-property start (point) 'org-change-marker (car entry)))))
+      (let ((width (apply #'max 0
+			  (mapcar (lambda (e) (length (or (nth 3 e) "")))
+				  entries))))
+	(dolist (entry entries)
+	  (let ((start (point))
+		(author (nth 3 entry)))
+	    (insert (format "%4d  " (nth 1 entry)))
+	    (when (> width 0)
+	      (let ((astart (point)))
+		(insert (format (format "%%-%ds  " width) (or author "")))
+		(when author
+		  (put-text-property astart (+ astart (length author))
+				     'face (org-change--change-face author)))))
+	    (insert (nth 2 entry) "\n")
+	    (put-text-property start (point) 'org-change-marker (car entry))))))
     (goto-char (point-min))
     (forward-line (1- line))
     ;; The last line may have gone: do not sit past the end of the list.
