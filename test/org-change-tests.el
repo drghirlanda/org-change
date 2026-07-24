@@ -532,6 +532,38 @@ and rejecting restores it."
       (should-not (org-fold-folded-p (point)))	; B revealed
       (should (org-fold-folded-p first)))))	; A folded again
 
+(ert-deftest org-change-test-sweep-reveals-each-folded-change ()
+  "The buffer sweep reveals each change under a folded heading in turn.
+It must not leave a change hidden while asking whether to accept it,
+and it must re-fold what it opened once it moves on."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A\nintro {!x!}{!y!} end\n* B\nmore {!p!}{!q!} tail\n")
+    (org-change-mode 1)
+    (org-fold-hide-sublevels 1)
+    (let ((a (org-change-tests--change-pos 1))
+	  (b (org-change-tests--change-pos 2))
+	  (seen nil))
+      (should (org-fold-folded-p a))
+      (should (org-fold-folded-p b))
+      ;; Skip both changes, recording whether each was visible, and
+      ;; whether the previous one had been re-folded, at its prompt.
+      (cl-letf (((symbol-function 'read-char)
+		 (lambda (&rest _)
+		   (push (list (not (org-fold-folded-p (point)))
+			       (and (org-fold-folded-p a) t))
+			 seen)
+		   ?\s)))
+	(org-change-accept-reject-all))
+      (setq seen (nreverse seen))
+      ;; First prompt: change A visible.
+      (should (equal (nth 0 seen) '(t nil)))
+      ;; Second prompt: change B visible, and A folded again.
+      (should (equal (nth 1 seen) '(t t)))
+      ;; Afterwards the buffer is folded as it started.
+      (should (org-fold-folded-p a))
+      (should (org-fold-folded-p b)))))
+
 (ert-deftest org-change-test-reveal-is-a-noop-outside-org ()
   "Navigation still works in a non-org buffer, with nothing to reveal."
   (with-temp-buffer

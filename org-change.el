@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.11.1
+;; Version: 0.11.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -806,17 +806,30 @@ otherwise process the whole buffer."
       (setq end (copy-marker end t))
       (goto-char beg)
       (while (org-change--search-forward end t)
-	(let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
-	  (cond
-	   ;; Step past the replacement: `org-change--apply-change' leaves
-	   ;; point where it was, which would prompt for the same change again.
-	   ((char-equal answer ?y)
-	    (goto-char (or (org-change--apply-change t) (point))))
-	   ((char-equal answer ?n)
-	    (goto-char (or (org-change--apply-change nil) (point))))
-	   ((char-equal answer ?\s)) ; skip
-	   (t
-	    (goto-char (match-beginning 0))))))
+	;; Reveal the change before asking about it, the way navigation
+	;; does, so one hidden under a folded heading is not judged blind.
+	;; `--reveal' restores the previous reveal on the next call, so the
+	;; sweep leaves the outline folded as it found it.  A marker past the
+	;; change, so skipping still advances after point moves to reveal.
+	(let ((change-beg (match-beginning 0))
+	      (after (copy-marker (match-end 0) t)))
+	  (goto-char change-beg)
+	  (org-change--restore-fold)
+	  (org-change--reveal)
+	  (let ((answer (read-char "Accept change? [y/n] or SPC to skip, C-g to quit")))
+	    (cond
+	     ;; Step past the replacement: `org-change--apply-change' leaves
+	     ;; point where it was, which would prompt for it again.
+	     ((char-equal answer ?y)
+	      (goto-char (or (org-change--apply-change t) (point))))
+	     ((char-equal answer ?n)
+	      (goto-char (or (org-change--apply-change nil) (point))))
+	     ((char-equal answer ?\s)	; skip
+	      (goto-char after))
+	     (t
+	      (goto-char change-beg))))
+	  (set-marker after nil)))
+      (org-change--restore-fold)
       (set-marker end nil)
       (deactivate-mark)
       (org-change--overview-update)))
