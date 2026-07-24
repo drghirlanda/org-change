@@ -855,6 +855,101 @@ otherwise process the whole buffer."
       (org-change--overview-update)))
   (message "No more changes"))
 
+(defun org-change--author-match-p (author)
+  "Non-nil if the change just matched belongs to AUTHOR.
+AUTHOR is an id string, or the symbol `unattributed' for a change
+with no author.  Saves the match data."
+  (let ((this (org-change--change-author)))
+    (if (eq author 'unattributed)
+	(null this)
+      (equal this author))))
+
+(defun org-change--count-by-author (author beg end)
+  "Return the number of AUTHOR's changes between BEG and END."
+  (save-excursion
+    (goto-char beg)
+    (let ((limit (copy-marker end t)) (count 0))
+      (while (org-change--search-forward limit t)
+	(when (org-change--author-match-p author)
+	  (setq count (1+ count))))
+      (set-marker limit nil)
+      count)))
+
+(defun org-change--apply-by-author (accept author beg end)
+  "Accept or reject AUTHOR's changes between BEG and END.
+ACCEPT is as in `org-change--apply-change'.  Return the number of
+changes acted on.  Positions are markers, so the text shifting under
+the walk does not derail it."
+  (let ((limit (copy-marker end t)) (count 0))
+    (save-excursion
+      (goto-char beg)
+      (while (org-change--search-forward limit t)
+	(let ((matches (org-change--author-match-p author))
+	      (change-beg (match-beginning 0))
+	      (stop (match-end 0)))
+	  (if matches
+	      (let ((done (progn (goto-char change-beg)
+				 (org-change--apply-change accept))))
+		(if done
+		    (progn (setq count (1+ count))
+			   ;; `--apply-change' leaves point put; step past
+			   ;; the replacement so the walk moves on.
+			   (goto-char done))
+		  (goto-char (1+ change-beg))))
+	    (goto-char stop)))))
+    (set-marker limit nil)
+    count))
+
+(defun org-change--read-present-author (prompt)
+  "Read one of the authors present in the current buffer for PROMPT.
+Return an id string, or the symbol `unattributed'.  Signal a
+`user-error' when there is nothing to choose."
+  (let* ((present (org-change--authors-present))
+	 (alist (append
+		 (mapcar (lambda (id)
+			   (cons (org-change--author-label id) id))
+			 (car present))
+		 (when (cdr present) '(("(unattributed)" . unattributed))))))
+    (unless alist
+      (user-error "No changes to select"))
+    (cdr (assoc (completing-read prompt (mapcar #'car alist) nil t) alist))))
+
+(defun org-change--by-author (accept)
+  "Accept (ACCEPT is t) or reject (ACCEPT is nil) one author's changes.
+Acts on the active region if there is one, otherwise the whole
+buffer, after confirming how many changes will be affected."
+  (let* ((verb (if accept "Accept" "Reject"))
+	 (author (org-change--read-present-author
+		  (format "%s changes by author: " verb)))
+	 (region (use-region-p))
+	 (beg (if region (region-beginning) (point-min)))
+	 (end (if region (region-end) (point-max)))
+	 (count (org-change--count-by-author author beg end)))
+    (if (zerop count)
+	(message "No changes to %s" (downcase verb))
+      (when (y-or-n-p
+	     (if (eq author 'unattributed)
+		 (format "%s %d unattributed change%s? "
+			 verb count (if (= count 1) "" "s"))
+	       (format "%s %d change%s by %s? "
+		       verb count (if (= count 1) "" "s") author)))
+	(let ((done (org-change--apply-by-author accept author beg end)))
+	  (when region (deactivate-mark))
+	  (org-change--overview-update)
+	  (message "%d change%s %s"
+		   done (if (= done 1) "" "s")
+		   (if accept "accepted" "rejected")))))))
+
+(defun org-change-accept-by-author ()
+  "Accept every change by one author, in the region or the whole buffer."
+  (interactive)
+  (org-change--by-author t))
+
+(defun org-change-reject-by-author ()
+  "Reject every change by one author, in the region or the whole buffer."
+  (interactive)
+  (org-change--by-author nil))
+
 ;;; Comments
 
 (defun org-change-comment ()

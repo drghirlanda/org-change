@@ -1608,6 +1608,74 @@ There is nothing to type there, so the prefix is not needed."
 		   '("SG  c")))
     (should (equal header-line-format "Author: SG"))))
 
+;;; Accepting and rejecting by author
+
+(defun org-change-tests--by-author (fn author yes text)
+  "Insert TEXT, run FN with the author prompt → AUTHOR and y-or-n-p → YES.
+Return the resulting buffer text."
+  (with-temp-buffer
+    (org-mode)
+    (insert text)
+    (org-change-mode 1)
+    (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) author))
+	      ((symbol-function 'y-or-n-p) (lambda (&rest _) yes)))
+      (funcall fn))
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(ert-deftest org-change-test-accept-by-author-takes-only-that-author ()
+  "Accepting by author acts on that author's changes and no others."
+  (should (equal (org-change-tests--by-author
+		  #'org-change-accept-by-author "SG" t
+		  "a {!x!}{!!}{!@SG!} b {!y!}{!!}{!@MR!} c {!z!}{!!}{!@SG!} d")
+		 "a x b {!y!}{!!}{!@MR!} c z d")))
+
+(ert-deftest org-change-test-reject-by-author-takes-only-that-author ()
+  "Rejecting by author restores that author's old text only."
+  (should (equal (org-change-tests--by-author
+		  #'org-change-reject-by-author "MR" t
+		  "a {!x!}{!o!}{!@SG!} b {!y!}{!p!}{!@MR!} c")
+		 "a {!x!}{!o!}{!@SG!} b p c")))
+
+(ert-deftest org-change-test-by-author-declined-does-nothing ()
+  "Answering no to the confirmation leaves the buffer untouched."
+  (should (equal (org-change-tests--by-author
+		  #'org-change-accept-by-author "SG" nil
+		  "a {!x!}{!!}{!@SG!} b")
+		 "a {!x!}{!!}{!@SG!} b")))
+
+(ert-deftest org-change-test-by-author-targets-unattributed ()
+  "The (unattributed) choice acts on the un-tagged changes."
+  (should (equal (org-change-tests--by-author
+		  #'org-change-accept-by-author "(unattributed)" t
+		  "a {!x!}{!!}{!@SG!} b {!y!}{!!} c")
+		 "a {!x!}{!!}{!@SG!} b y c")))
+
+(ert-deftest org-change-test-by-author-respects-the-region ()
+  "With a region active, only changes inside it are considered."
+  (with-temp-buffer
+    (org-mode)
+    (insert "a {!x!}{!!}{!@SG!} b {!z!}{!!}{!@SG!} c")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 1 21)	; only the first SG change
+    (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "SG"))
+	      ((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+      (org-change-accept-by-author))
+    (should (equal (buffer-substring-no-properties (point-min) (point-max))
+		   "a x b {!z!}{!!}{!@SG!} c"))))
+
+(ert-deftest org-change-test-by-author-reports-the-count ()
+  "The confirmation prompt names how many changes will be affected."
+  (with-temp-buffer
+    (org-mode)
+    (insert "a {!x!}{!!}{!@SG!} b {!z!}{!!}{!@SG!} c")
+    (org-change-mode 1)
+    (let (asked)
+      (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "SG"))
+		((symbol-function 'y-or-n-p)
+		 (lambda (prompt &rest _) (setq asked prompt) nil)))
+	(org-change-accept-by-author))
+      (should (equal asked "Accept 2 changes by SG? ")))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
