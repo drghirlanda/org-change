@@ -1440,6 +1440,52 @@ There is nothing to type there, so the prefix is not needed."
       (should (equal (org-export-as 'ascii nil nil t)
 		     "Some new text and a word.\n")))))
 
+;;; Author helpers
+
+(defun org-change-tests--author-at (text pos)
+  "Return the author of the change at POS in TEXT."
+  (with-temp-buffer
+    (insert text)
+    (goto-char pos)
+    (org-change--at-change)
+    (org-change--change-author)))
+
+(ert-deftest org-change-test-change-author-reads-the-id ()
+  "The author is the @ID prefix of the comment."
+  (should (equal (org-change-tests--author-at "a {!x!}{!y!}{!@SG note!} b" 6)
+		 "SG")))
+
+(ert-deftest org-change-test-change-author-nil-without-id ()
+  "A comment without an @ID leaves the change unattributed."
+  (should-not (org-change-tests--author-at "a {!x!}{!y!}{!just a note!} b" 6)))
+
+(ert-deftest org-change-test-change-author-nil-without-comment ()
+  "A change with no comment is unattributed."
+  (should-not (org-change-tests--author-at "a {!x!}{!y!} b" 6)))
+
+(ert-deftest org-change-test-change-author-keeps-match-data ()
+  "Reading the author does not disturb a caller walking the buffer."
+  (with-temp-buffer
+    (insert "a {!x!}{!y!}{!@SG!} b {!p!}{!q!} c")
+    (goto-char (point-min))
+    (org-change--search-forward nil t)
+    (let ((beg (match-beginning 0)))
+      (org-change--change-author)
+      (should (= (match-beginning 0) beg))
+      (should (equal (match-string 1) "x")))))
+
+(ert-deftest org-change-test-authors-present-lists-in-order ()
+  "Distinct authors are returned in first-seen order, with the flag."
+  (with-temp-buffer
+    (insert "{!a!}{!!}{!@MR!} x {!b!}{!!}{!@SG!} y {!c!}{!!} z {!d!}{!!}{!@MR!}")
+    (should (equal (org-change--authors-present) '(("MR" "SG") . t)))))
+
+(ert-deftest org-change-test-authors-present-skips-empty-change ()
+  "The empty change is not counted as an unattributed change."
+  (with-temp-buffer
+    (insert "{!a!}{!!}{!@SG!} x {!!}{!!}")
+    (should (equal (org-change--authors-present) '(("SG"))))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here

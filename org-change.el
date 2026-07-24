@@ -1008,6 +1008,35 @@ time."
 (defvar-local org-change-overview--source nil
   "The buffer whose changes the overview lists.")
 
+(defun org-change--change-author ()
+  "Return the author id of the change just matched, or nil.
+The author is the @ID prefix of the comment group, read the way the
+on-screen comment and the exporters read it.  Uses the match data of
+`org-change--regexp', so it must be called right after a search; it
+saves that data, so a caller walking the buffer can call it between
+searches."
+  (save-match-data
+    (car (org-change--split-comment
+	  (org-change--decode (or (match-string-no-properties 3) ""))))))
+
+(defun org-change--authors-present ()
+  "Return (IDS . UNATTRIBUTED) for the changes in the current buffer.
+IDS is the distinct author ids that occur, in first-seen order.
+UNATTRIBUTED is non-nil when at least one change has no author.  The
+empty change is skipped, as it is everywhere else."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((ids nil) (unattr nil))
+      (while (org-change--search-forward nil t)
+	(let ((new (match-string-no-properties 1))
+	      (old (match-string-no-properties 2))
+	      (author (org-change--change-author)))
+	  (unless (and (equal new "") (equal old ""))
+	    (if author
+		(unless (member author ids) (push author ids))
+	      (setq unattr t)))))
+      (cons (nreverse ids) unattr))))
+
 (defun org-change--change-summary ()
   "Return a one-line description of the change just matched.
 Uses the match data of `org-change--regexp', so it has to be called
