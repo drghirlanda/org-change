@@ -773,6 +773,26 @@ this buffer is refreshed, so it never lists a change that is gone."
   (interactive "")
   (org-change--accept-or-reject nil))
 
+(defun org-change-set-author ()
+  "Set `org-change-author', the id stamped on changes you make.
+Completes over `org-change-authors', each shown as its id and name,
+with a No author choice to clear the author.  A match is not
+required: an id typed on the spot is used as-is, and simply has no
+color until you add it to `org-change-authors'."
+  (interactive)
+  (let* ((alist (append
+		 (mapcar (lambda (entry)
+			   (cons (org-change--author-label (car entry))
+				 (car entry)))
+			 org-change-authors)
+		 '(("No author" . nil))))
+	 (choice (completing-read "Author: " (mapcar #'car alist) nil nil))
+	 (id (if (assoc choice alist)
+		 (cdr (assoc choice alist))
+	       (unless (string-empty-p choice) choice))))
+    (setq org-change-author id)
+    (message (if id (format "Author set to %s" id) "Author cleared"))))
+
 (defun org-change-accept-and-next ()
   "Accept the change at point, or the region's changes, then move on.
 Like `org-change-accept', but afterwards point goes to the next
@@ -1007,6 +1027,15 @@ time."
 
 (defvar-local org-change-overview--source nil
   "The buffer whose changes the overview lists.")
+
+(defun org-change--author-label (id)
+  "Return a completion label for author ID: \"ID  (Name)\", or \"ID\".
+The name comes from `org-change-authors'; an id that is not
+registered there is shown on its own."
+  (let ((name (plist-get (cdr (assoc id org-change-authors)) :name)))
+    (if (and name (not (string-empty-p name)))
+	(format "%s  (%s)" id name)
+      id)))
 
 (defun org-change--change-author ()
   "Return the author id of the change just matched, or nil.

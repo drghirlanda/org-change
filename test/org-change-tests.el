@@ -1486,6 +1486,37 @@ There is nothing to type there, so the prefix is not needed."
     (insert "{!a!}{!!}{!@SG!} x {!!}{!!}")
     (should (equal (org-change--authors-present) '(("SG"))))))
 
+;;; Setting the author
+
+(ert-deftest org-change-test-author-label-shows-the-name ()
+  "A registered author is labelled id and name; an unknown id is bare."
+  (let ((org-change-authors '(("SG" :name "Stefano Ghirlanda" :color "blue"))))
+    (should (equal (org-change--author-label "SG") "SG  (Stefano Ghirlanda)"))
+    (should (equal (org-change--author-label "ZZ") "ZZ"))))
+
+(defun org-change-tests--set-author-with (answer)
+  "Run `org-change-set-author' with `completing-read' returning ANSWER."
+  (let ((org-change-author "start"))
+    (cl-letf (((symbol-function 'completing-read)
+	       (lambda (&rest _) answer)))
+      (org-change-set-author))
+    org-change-author))
+
+(ert-deftest org-change-test-set-author-picks-a-registered-id ()
+  "Choosing the label of a registered author sets that id."
+  (let ((org-change-authors '(("SG" :name "Stefano Ghirlanda"))))
+    (should (equal (org-change-tests--set-author-with "SG  (Stefano Ghirlanda)")
+		   "SG"))))
+
+(ert-deftest org-change-test-set-author-accepts-a-new-id ()
+  "Typing an id that is not registered sets it verbatim."
+  (let ((org-change-authors '(("SG" :name "Stefano Ghirlanda"))))
+    (should (equal (org-change-tests--set-author-with "MR") "MR"))))
+
+(ert-deftest org-change-test-set-author-can-clear ()
+  "Choosing No author clears the author."
+  (should-not (org-change-tests--set-author-with "No author")))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
