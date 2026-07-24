@@ -1028,6 +1028,12 @@ time."
 (defvar-local org-change-overview--source nil
   "The buffer whose changes the overview lists.")
 
+(defvar-local org-change-overview--filter nil
+  "The author the overview is filtered to.
+An id string shows only that author's changes; the symbol
+`unattributed' shows only changes with no author; nil shows every
+change.")
+
 (defun org-change--author-label (id)
   "Return a completion label for author ID: \"ID  (Name)\", or \"ID\".
 The name comes from `org-change-authors'; an id that is not
@@ -1099,6 +1105,23 @@ the line it is on, and a one-line description of it."
 		  entries)))
 	(nreverse entries)))))
 
+(defun org-change-overview--filter-entries (entries)
+  "Return the ENTRIES that match `org-change-overview--filter'.
+Each entry is (MARKER LINE SUMMARY AUTHOR)."
+  (let ((filter org-change-overview--filter))
+    (cond
+     ((null filter) entries)
+     ((eq filter 'unattributed)
+      (seq-filter (lambda (e) (null (nth 3 e))) entries))
+     (t (seq-filter (lambda (e) (equal (nth 3 e) filter)) entries)))))
+
+(defun org-change-overview--header ()
+  "Return the header line naming the active author filter."
+  (concat "Author: "
+	  (cond ((null org-change-overview--filter) "all")
+		((eq org-change-overview--filter 'unattributed) "(unattributed)")
+		(t org-change-overview--filter))))
+
 (defun org-change-overview--render ()
   "Fill the overview buffer from the changes of its source.
 Point stays on the line it was on, so that accepting or rejecting
@@ -1108,10 +1131,12 @@ back to: refreshing from the other buffer must not lose the place
 the cursor holds on screen."
   (let* ((source org-change-overview--source)
 	 (entries (and (buffer-live-p source)
-		       (org-change--overview-entries source)))
+		       (org-change-overview--filter-entries
+			(org-change--overview-entries source))))
 	 (window (get-buffer-window (current-buffer) t))
 	 (line (line-number-at-pos (if window (window-point window) (point))))
 	 (inhibit-read-only t))
+    (setq header-line-format (org-change-overview--header))
     (erase-buffer)
     (if (null entries)
 	(insert "No changes")
@@ -1163,6 +1188,26 @@ list showing a change that is no longer there."
     (or (get-buffer-window source)
 	(display-buffer source '(nil (inhibit-same-window . t))))))
 
+(defun org-change-overview-filter ()
+  "Show only the changes of one author, or of none, or all again.
+Prompts for an author present in the buffer, with a (unattributed)
+choice when there are un-tagged changes and an All choice to clear
+the filter."
+  (interactive)
+  (unless (buffer-live-p org-change-overview--source)
+    (user-error "The buffer this overview describes is gone"))
+  (let* ((present (with-current-buffer org-change-overview--source
+		    (org-change--authors-present)))
+	 (alist (append
+		 (mapcar (lambda (id)
+			   (cons (org-change--author-label id) id))
+			 (car present))
+		 (when (cdr present) '(("(unattributed)" . unattributed)))
+		 '(("All" . nil))))
+	 (choice (completing-read "Show author: " (mapcar #'car alist) nil t)))
+    (setq org-change-overview--filter (cdr (assoc choice alist)))
+    (org-change-overview--render)))
+
 (defun org-change-overview-goto ()
   "Go to the change listed on this line, in the buffer it belongs to."
   (interactive)
@@ -1210,6 +1255,7 @@ customized."
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "RET") #'org-change-overview-goto)
+    (define-key map "a" #'org-change-overview-filter)
     (dolist (row `((,org-change-accept-key . org-change-overview-accept)
 		   (,org-change-reject-key . org-change-overview-reject)))
       (define-key map (car row) (cdr row))
@@ -1226,7 +1272,8 @@ both as they are in the text and without their prefix.")
   "Major mode for the buffer listing the changes of another buffer.
 
 Move with the arrow keys, press \\[org-change-overview-goto] to go
-to the change on this line, \\[revert-buffer] to refresh the list,
+to the change on this line, \\[org-change-overview-filter] to show
+only one author's changes, \\[revert-buffer] to refresh the list,
 and \\[quit-window] to close the window.  The accept and reject
 keys act on the change listed on this line, in the buffer being
 reviewed; there is nothing to type here, so they work without their
@@ -1247,6 +1294,7 @@ away.  See `org-change-overview-mode' for what the keys do."
 	(org-change-overview-mode))
       ;; After the mode: turning it on kills the buffer-local variables.
       (setq org-change-overview--source source)
+      (setq org-change-overview--filter nil)
       (org-change-overview--render))
     (select-window
      (display-buffer buffer

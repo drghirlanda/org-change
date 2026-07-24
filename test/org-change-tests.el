@@ -1545,6 +1545,69 @@ There is nothing to type there, so the prefix is not needed."
       (should (equal (get-text-property (match-beginning 0) 'face)
 		     (org-change--change-face "SG"))))))
 
+;;; Filtering the overview by author
+
+(defun org-change-tests--filter-to (answer)
+  "Run `org-change-overview-filter' with `completing-read' → ANSWER."
+  (cl-letf (((symbol-function 'completing-read)
+	     (lambda (&rest _) answer)))
+    (org-change-overview-filter)))
+
+(ert-deftest org-change-test-overview-filters-to-an-author ()
+  "Filtering to an author shows only that author's changes."
+  (org-change-tests--with-overview
+      "{!a!}{!!}{!@SG!}\n{!b!}{!!}{!@MR!}\n{!c!}{!!}{!@SG!}"
+    (org-change-tests--filter-to "SG")
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max)) "\n" t)
+		   '("   1  SG  a" "   3  SG  c")))
+    (should (equal header-line-format "Author: SG"))))
+
+(ert-deftest org-change-test-overview-filters-to-unattributed ()
+  "Filtering to (unattributed) shows only changes with no author."
+  (org-change-tests--with-overview
+      "{!a!}{!!}{!@SG!}\n{!b!}{!!}\n{!c!}{!!}{!@SG!}"
+    (org-change-tests--filter-to "(unattributed)")
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max)) "\n" t)
+		   '("   2  b")))
+    (should (equal header-line-format "Author: (unattributed)"))))
+
+(ert-deftest org-change-test-overview-filter-all-restores ()
+  "Filtering to All shows everything again."
+  (org-change-tests--with-overview
+      "{!a!}{!!}{!@SG!}\n{!b!}{!!}{!@MR!}"
+    (org-change-tests--filter-to "SG")
+    (org-change-tests--filter-to "All")
+    (should (equal (split-string (buffer-substring-no-properties
+				  (point-min) (point-max)) "\n" t)
+		   '("   1  SG  a" "   2  MR  b")))
+    (should (equal header-line-format "Author: all"))))
+
+(ert-deftest org-change-test-overview-filter-accepts-within-author ()
+  "Accepting on a filtered list acts on that change in the source."
+  (org-change-tests--with-overview
+      "x {!a!}{!!}{!@SG!} y {!b!}{!!}{!@MR!} z"
+    (org-change-tests--filter-to "SG")
+    (org-change-overview-accept)
+    (should (equal (with-current-buffer source
+		     (buffer-substring-no-properties (point-min) (point-max)))
+		   "x a y {!b!}{!!}{!@MR!} z"))))
+
+(ert-deftest org-change-test-overview-filter-survives-a-refresh ()
+  "A refresh from the text buffer keeps the active filter."
+  (org-change-tests--with-overview
+      "x {!a!}{!!}{!@SG!} y {!b!}{!!}{!@MR!} z {!c!}{!!}{!@SG!} w"
+    (org-change-tests--filter-to "SG")
+    (with-current-buffer source
+      (goto-char 4)			; the first SG change
+      (org-change-accept))
+    (should (equal (mapcar (lambda (l) (string-trim (substring l 6)))
+			   (split-string (buffer-substring-no-properties
+					  (point-min) (point-max)) "\n" t))
+		   '("SG  c")))
+    (should (equal header-line-format "Author: SG"))))
+
 (provide 'org-change-tests)
 
 ;;; org-change-tests.el ends here
