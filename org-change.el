@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.11.2
+;; Version: 0.12.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -33,7 +33,11 @@
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Count them with
 ;; org-change-info (C-` i), or list them in a side window with
-;; org-change-overview (C-` o).  Press C-` h for a summary of the key
+;; org-change-overview (C-` o).  Attribute changes to authors with
+;; org-change-author (set it with org-change-set-author), review one
+;; author at a time in the overview, and accept or reject a whole
+;; author's changes with org-change-accept-by-author and
+;; org-change-reject-by-author.  Press C-` h for a summary of the key
 ;; bindings.  Generate change markup from
 ;; two versions of a document with org-change-from-diff.  When
 ;; used in org-mode, LaTeX, HTML, and plain text export are

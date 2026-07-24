@@ -82,6 +82,7 @@ Point lands at the beginning of the change. If point is inside a change, these m
 Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). The window is selected right away, so you can start moving through the list. In it:
 - ~up~ / ~down~ :: move from change to change.
 - ~RET~ :: go to the change on this line, in the buffer being reviewed.
+- ~a~ :: filter the list to one author, to the unattributed changes, or back to all.
 - ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and point there does not move. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
 - ~g~ :: refresh the list, if you have edited the buffer since opening it.
 - ~q~ :: close the window.
@@ -155,6 +156,10 @@ Register authors and their colors in ~org-change-authors~:
 Each change is then tinted with its author's color in the buffer. On export the author becomes the ~changes~ package author: LaTeX writes ~\added[id=SG]{...}~ and injects a ~\definechangesauthor~ line for each registered author, while HTML adds an ~org-change-author-SG~ class to the change's spans. For LaTeX, use color names the ~xcolor~ package knows, such as "blue", "red", or "green".
 
 If ~org-change-author~ is nil (the default), changes carry no author and behave exactly as before.
+
+You can set the current author interactively with ~M-x org-change-set-author~, which completes over ~org-change-authors~ and offers a "No author" choice; an id you type that is not in the list is used as-is, with no color until you register it.
+
+When several people have marked changes, you can review one at a time. In the overview (see [[A bird's eye view of the changes]]) each change shows its author, and ~a~ filters the list to a chosen author, to the changes that carry no author, or back to all. To dispose of a whole author's changes at once, ~M-x org-change-accept-by-author~ and ~M-x org-change-reject-by-author~ prompt for an author, count the matching changes in the region (or the whole buffer), and ask for confirmation before acting.
 
 * Showing deleted text
 
