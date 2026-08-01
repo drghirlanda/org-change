@@ -661,6 +661,27 @@ Guards the after-string overlays against being deleted for being empty."
 	      (setq shown t))))
 	(should shown)))))
 
+(ert-deftest org-change-test-new-text-end-is-not-invisible ()
+  "The end of an addition's new text is a restable, appendable position.
+Hiding the trailing markup with `invisible' would make Emacs push
+point off this position; a zero-width `display' does not."
+  (with-temp-buffer
+    (insert "a {!new!}{!!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (re-search-forward "new")		; point now at the end of the new text
+    (should-not (invisible-p (get-char-property (point) 'invisible)))))
+
+(ert-deftest org-change-test-can-append-to-new-text ()
+  "Typing at the end of the new text extends it, not the surrounding buffer."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (re-search-forward "new")		; end of the new text, before `!}'
+    (insert "X")
+    (should (string-match-p "{!newX!}{!old!}" (buffer-string)))))
+
 (ert-deftest org-change-test-deleted-spaces-shown-as-dashes ()
   "Displayed deleted text shows spaces as dashes, leaving the buffer intact."
   (let ((org-change-show-deleted t))
@@ -743,7 +764,7 @@ strip the change's overlays: the closing markup stays hidden."
     ;; the closing !}{!!} must still be hidden by an org-change overlay
     (goto-char (point-min))
     (re-search-forward "!}{!!}")
-    (should (get-char-property (match-beginning 0) 'invisible))))
+    (should (equal (get-char-property (match-beginning 0) 'display) ""))))
 
 ;;; Multi-author support
 

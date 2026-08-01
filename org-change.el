@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.12.1
+;; Version: 0.12.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -432,13 +432,19 @@ echo area is needed for other things."
 	       (org-change--deleted-display old-text))))
 	   ;; Addition or replacement: show new text
 	   (t
-	    ;; Hide {! before new text
-	    (org-change--make-overlay open-beg open-end 'invisible t)
+	    ;; Hide {! before new text.  We collapse it to zero width with
+	    ;; `display' rather than hiding it with `invisible': Emacs pushes
+	    ;; point off any position bordering invisible text, which would
+	    ;; make the end of the new text unreachable -- you could not
+	    ;; append to it, and word motion would jump past the hidden old
+	    ;; text.  A zero-width `display' hides the markup just as well
+	    ;; while leaving those boundaries as ordinary editing positions.
+	    (org-change--make-overlay open-beg open-end 'display "")
 	    ;; Face on new text
 	    (org-change--make-overlay new-beg new-end
 				      'face face)
 	    ;; Hide !}{!old!} and optional {!comment!}
-	    (org-change--make-overlay mid-beg full-end 'invisible t)
+	    (org-change--make-overlay mid-beg full-end 'display "")
 	    (when (and org-change-show-deleted (not (equal old-text "")))
 	      ;; Show old text after the change
 	      (org-change--after-string-overlay
