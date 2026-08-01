@@ -661,6 +661,44 @@ Guards the after-string overlays against being deleted for being empty."
 	      (setq shown t))))
 	(should shown)))))
 
+(ert-deftest org-change-test-markup-edge-detected-at-new-text-end ()
+  "Point at the end of the new text is recognized as a hidden-markup edge."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (re-search-forward "new")		; end of the new text
+    (should (org-change--markup-edge-p))
+    ;; a plain-text position is not an edge
+    (goto-char (point-min))
+    (should-not (org-change--markup-edge-p))))
+
+(ert-deftest org-change-test-keep-point-suppresses-adjustment ()
+  "At a hidden-markup edge, point adjustment is suppressed for the command.
+This stops Emacs relocating point past the hidden old text while
+you type the replacement."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (re-search-forward "new")
+    (let ((disable-point-adjustment nil))
+      (org-change--keep-point)
+      (should disable-point-adjustment))
+    ;; away from any edge it leaves adjustment alone
+    (goto-char (point-min))
+    (let ((disable-point-adjustment nil))
+      (org-change--keep-point)
+      (should-not disable-point-adjustment))))
+
+(ert-deftest org-change-test-keep-point-hook-installed ()
+  "`org-change-mode' installs the point-keeping pre-command hook."
+  (with-temp-buffer
+    (org-change-mode 1)
+    (should (memq #'org-change--keep-point pre-command-hook))
+    (org-change-mode -1)
+    (should-not (memq #'org-change--keep-point pre-command-hook))))
+
 (ert-deftest org-change-test-new-text-end-is-not-invisible ()
   "The end of an addition's new text is a restable, appendable position.
 Hiding the trailing markup with `invisible' would make Emacs push

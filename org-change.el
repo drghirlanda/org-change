@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.12.2
+;; Version: 0.12.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -478,6 +478,32 @@ lines re-fontifies the whole change rather than truncating it."
 	    (setq rbeg (min rbeg (overlay-start ov))
 		  rend (max rend (overlay-end ov)))))
 	(org-change-fontify rbeg rend)))))
+
+(defun org-change--markup-edge-p ()
+  "Non-nil when point sits at the edge of hidden change markup.
+Emacs relocates point off any boundary of text hidden by an
+`invisible' or zero-width `display' property.  The end of a
+change's new text is such a boundary, so once the typing
+placeholder is consumed every further keystroke would otherwise
+be pushed past the hidden old text into unmarked space.
+Recognizing the edge lets `org-change--keep-point' hold point
+still for that command."
+  (let ((p (point)) (edge nil))
+    (dolist (ov (overlays-in (max (point-min) (1- p))
+			     (min (point-max) (1+ p))))
+      (when (and (overlay-get ov 'org-change-overlay)
+		 (or (overlay-get ov 'invisible)
+		     (equal (overlay-get ov 'display) ""))
+		 (or (= (overlay-start ov) p)
+		     (= (overlay-end ov) p)))
+	(setq edge t)))
+    edge))
+
+(defun org-change--keep-point ()
+  "Keep point at a hidden-markup edge, run from `pre-command-hook'.
+See `org-change--markup-edge-p' for why this is needed."
+  (when (org-change--markup-edge-p)
+    (setq disable-point-adjustment t)))
 
 ;;; Change creation functions
 
@@ -1898,12 +1924,14 @@ is emitted for each entry in `org-change-authors'."
             map)
   (if org-change-mode
       (progn
+	(add-hook 'pre-command-hook #'org-change--keep-point nil t)
 	(add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
 	(add-hook 'after-change-functions #'org-change--after-change nil t)
 	(add-hook 'post-command-hook #'org-change--cleanup-empty nil t)
 	(org-change--setup-export)
 	(setq-local org-change--extra-space-pos nil)
 	(org-change-fontify))
+    (remove-hook 'pre-command-hook #'org-change--keep-point t)
     (remove-hook 'post-self-insert-hook #'org-change--erase-extra-space t)
     (remove-hook 'after-change-functions #'org-change--after-change t)
     (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
