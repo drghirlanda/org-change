@@ -661,6 +661,57 @@ Guards the after-string overlays against being deleted for being empty."
 	      (setq shown t))))
 	(should shown)))))
 
+(ert-deftest org-change-test-deleted-spaces-shown-as-dashes ()
+  "Displayed deleted text shows spaces as dashes, leaving the buffer intact."
+  (let ((org-change-show-deleted t))
+    (with-temp-buffer
+      (insert "a {!!}{!one two!} b")
+      (org-change-mode 1)
+      (let ((shown nil))
+	(dolist (ov (overlays-in (point-min) (point-max)))
+	  (let ((as (overlay-get ov 'after-string)))
+	    (when (and as (string-match-p "one" as))
+	      (setq shown as))))
+	(should shown)
+	;; spaces are rendered as dashes in the overlay ...
+	(should (string-match-p "one-two" shown))
+	(should-not (string-match-p "one two" shown))
+	;; ... but the buffer text itself is unchanged.
+	(should (string-match-p "one two" (buffer-string)))))))
+
+(ert-deftest org-change-test-replace-reveals-fold-at-point ()
+  "Replacing inside a folded region reveals point so typing is not blocked."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Heading\nalpha beta gamma\n")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (org-fold-hide-subtree)
+    (goto-char (point-min))
+    (should (re-search-forward "beta" nil t))
+    (should (org-fold-folded-p (point)))	; body is folded
+    (set-mark (match-beginning 0))
+    (goto-char (match-end 0))
+    (activate-mark)
+    (org-change-replace)
+    ;; point now sits on the placeholder space, which must be visible.
+    (should-not (org-fold-folded-p (point)))))
+
+(ert-deftest org-change-test-add-reveals-fold-at-point ()
+  "Adding inside a folded region reveals point so typing is not blocked."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Heading\nalpha beta gamma\n")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (org-fold-hide-subtree)
+    (goto-char (point-min))
+    (should (re-search-forward "beta" nil t))
+    (goto-char (match-beginning 0))
+    (should (org-fold-folded-p (point)))
+    (org-change-add)			; no region: inserts empty addition
+    (should-not (org-fold-folded-p (point)))))
+
 (ert-deftest org-change-test-comment-shown-only-once ()
   "Adding a comment must not stack two copies of the after-string."
   (with-temp-buffer

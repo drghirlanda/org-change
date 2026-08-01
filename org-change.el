@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.12.0
+;; Version: 0.12.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -64,6 +64,15 @@ The deleted/replaced text is shown in the face
 
 (defcustom org-change-deleted-marker "✗"
   "Placeholder for deleted text."
+  :type 'string
+  :group 'org-change)
+
+(defcustom org-change-deleted-space "-"
+  "String shown in place of each space in displayed deleted text.
+When `org-change-show-deleted' is on, the deleted text is shown
+next to the change.  Its spaces are otherwise easy to miss, so
+each is displayed as this string.  Only the display is affected;
+the buffer text is unchanged."
   :type 'string
   :group 'org-change)
 
@@ -353,6 +362,14 @@ overlay is deleted at once.  It is cleaned up by
     (overlay-put ov 'after-string string)
     ov))
 
+(defun org-change--deleted-display (text)
+  "Return TEXT propertized for display as deleted text.
+Spaces become `org-change-deleted-space' so they stay visible;
+the result carries `org-change-deleted-face'."
+  (propertize
+   (replace-regexp-in-string " " org-change-deleted-space text t t)
+   'face 'org-change-deleted-face))
+
 (defun org-change-fontify (&optional rbeg rend)
   "Fontify change markup using overlays.
 Called automatically when Org Change mode starts.  Optional
@@ -412,7 +429,7 @@ echo area is needed for other things."
 	      ;; Also show old text after the marker
 	      (org-change--after-string-overlay
 	       full-end
-	       (propertize old-text 'face 'org-change-deleted-face))))
+	       (org-change--deleted-display old-text))))
 	   ;; Addition or replacement: show new text
 	   (t
 	    ;; Hide {! before new text
@@ -426,7 +443,7 @@ echo area is needed for other things."
 	      ;; Show old text after the change
 	      (org-change--after-string-overlay
 	       full-end
-	       (propertize old-text 'face 'org-change-deleted-face)))))
+	       (org-change--deleted-display old-text)))))
 	  ;; Show the author and comment, if any, in italic after the
 	  ;; change, as "author: note" -- so the author is legible
 	  ;; without having to remember which color is whose.
@@ -492,6 +509,7 @@ type the new text."
 	(org-change-fontify beg (point))
 	;; place point inside the new text, on the space
 	(goto-char (+ beg 2))
+	(org-change--unfold-at-point)
 	(org-change--mark-extra-space)))))
 
 (defun org-change-delete ()
@@ -539,6 +557,7 @@ If there is no active region, insert an empty addition for typing."
       (when (equal new-text " ")
 	;; place point on the space for typing
 	(goto-char (+ beg 2))
+	(org-change--unfold-at-point)
 	(org-change--mark-extra-space)))))
 
 (defun org-change--mark-extra-space ()
@@ -1022,6 +1041,17 @@ nothing outside `org-mode'."
       (setq org-change--fold-restore
 	    (lambda ()
 	      (org-fold-core-regions saved :override t :clean-markers t))))
+    (org-fold-show-set-visibility 'canonical)))
+
+(defun org-change--unfold-at-point ()
+  "Reveal any org fold hiding point, so typing there is not blocked.
+`org-change-replace' and `org-change-add' leave point on a space
+placeholder for typing; when that lands in folded text, Org
+refuses the edit (\"Edit in invisible region aborted\").  Revealing
+the fold first avoids that.  Does nothing outside `org-mode'."
+  (when (and (derived-mode-p 'org-mode)
+	     (fboundp 'org-fold-folded-p)
+	     (org-fold-folded-p (point)))
     (org-fold-show-set-visibility 'canonical)))
 
 (defun org-change--goto-change (dest)
