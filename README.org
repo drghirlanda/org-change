@@ -79,11 +79,11 @@ Point lands at the beginning of the change. If point is inside a change, these m
 
 ** A bird's eye view of the changes
 
-Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). The window is selected right away, so you can start moving through the list. In it:
-- ~up~ / ~down~ :: move from change to change.
-- ~RET~ :: go to the change on this line, in the buffer being reviewed.
+Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). When ~org-change-show-deleted~ is on (see [[Showing deleted text]]), a replacement shows its removed text as well, as =new✗old=. The window is selected right away, so you can start moving through the list. In it:
+- ~up~ / ~down~ :: move from change to change. The buffer being reviewed follows along, showing (and revealing, if folded) the change on the current line, so you preview each without leaving the list.
+- ~RET~ :: jump into the buffer being reviewed, at the change on this line.
 - ~a~ :: filter the list to one author, to the unattributed changes, or back to all.
-- ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and point there does not move. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
+- ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and then the source view moves on to the change that takes its place. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
 - ~g~ :: refresh the list, if you have edited the buffer since opening it.
 - ~q~ :: close the window.
 Accepting or rejecting from the list refreshes it and leaves the cursor where it is, so the next change moves up into place: you can work down a document without moving at all. The list also keeps up with the buffer itself: accepting or rejecting there, whether one change or a whole region, refreshes it, so it never shows a change that is gone. It does not follow other edits, so press ~g~ after adding changes. The width and the side of the frame the window opens on are ~org-change-overview-width~ and ~org-change-overview-side~.

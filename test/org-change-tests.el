@@ -1411,13 +1411,45 @@ works down the list without having to move."
 		     (buffer-substring-no-properties (point-min) (point-max)))
 		   "a x b p c"))))
 
-(ert-deftest org-change-test-overview-keeps-the-source-point-put ()
-  "Reviewing from the overview does not move point in the source buffer."
+(ert-deftest org-change-test-overview-moves-source-point-on-accept ()
+  "Accepting from the overview moves source point onto the next change."
   (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
-    (with-current-buffer source (goto-char (point-max)))
-    (org-change-overview-accept)
-    (should (= (with-current-buffer source (point))
-	       (with-current-buffer source (point-max))))))
+    (org-change-overview-accept)		; source becomes "a x b {!p!}{!q!} c"
+    (should (equal (with-current-buffer source (org-change--at-change))
+		   (cons 7 17)))))
+
+(ert-deftest org-change-test-overview-follows-cursor-to-change ()
+  "Moving in the overview moves source point to that line's change."
+  (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"
+    (forward-line 1)			; the second change
+    (org-change-overview--show-in-source)
+    (should (equal (with-current-buffer source (org-change--at-change))
+		   (cons 16 26)))))
+
+(ert-deftest org-change-test-overview-follow-hook-installed ()
+  "`org-change-overview-mode' installs the point-following hook."
+  (org-change-tests--with-overview "a {!x!}{!y!} b"
+    (should (memq #'org-change-overview--follow post-command-hook))))
+
+(ert-deftest org-change-test-overview-hides-deleted-by-default ()
+  "Without `org-change-show-deleted', a replacement shows only its new text."
+  (let ((org-change-show-deleted nil))
+    (org-change-tests--with-overview "a {!new!}{!old!} b"
+      (should (equal (org-change-tests--overview-lines) '("new"))))))
+
+(ert-deftest org-change-test-overview-shows-deleted-when-enabled ()
+  "With `org-change-show-deleted', a replacement shows its removed text too."
+  (let ((org-change-show-deleted t))
+    (org-change-tests--with-overview "a {!new!}{!old!} b"
+      (should (equal (org-change-tests--overview-lines) '("new✗old"))))))
+
+(ert-deftest org-change-test-toggle-deleted-refreshes-overview ()
+  "Toggling deleted text refreshes an open overview."
+  (org-change-tests--with-overview "a {!new!}{!old!} b"
+    (let ((org-change-show-deleted nil))
+      (should (equal (org-change-tests--overview-lines) '("new")))
+      (with-current-buffer source (org-change-toggle-deleted-text))
+      (should (equal (org-change-tests--overview-lines) '("new✗old"))))))
 
 (ert-deftest org-change-test-overview-opens-a-side-window ()
   "The overview is shown in a side window, which `q' closes."

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.12.3
+;; Version: 0.13.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -1240,9 +1240,14 @@ right after a search.  A deletion has no new text to show, so its
 old text is shown behind `org-change-deleted-marker' instead."
   (let* ((new (org-change--decode (match-string-no-properties 1)))
 	 (old (org-change--decode (match-string-no-properties 2)))
-	 (text (if (equal new "")
-		   (concat org-change-deleted-marker old)
-		 new))
+	 (text (cond
+		;; A deletion has no new text: always show what was removed.
+		((equal new "") (concat org-change-deleted-marker old))
+		;; A replacement shows its removed text only when
+		;; `org-change-show-deleted' is on, as the buffer does.
+		((and org-change-show-deleted (not (equal old "")))
+		 (concat new org-change-deleted-marker old))
+		(t new)))
 	 (line (car (split-string text "\n"))))
     (if (string-empty-p (string-trim line))
 	"(empty)"
@@ -1377,6 +1382,30 @@ the filter."
     (select-window window)
     (org-change--goto-change (marker-position marker))))
 
+(defun org-change-overview--show-in-source ()
+  "Move point to this line's change in the source, keeping the overview selected.
+When the source is shown in a window, reveal and recenter the
+change there as `org-change--goto-change' does; otherwise just
+move point in the source buffer.  Does nothing when the line
+lists no change."
+  (let ((marker (get-text-property (line-beginning-position) 'org-change-marker))
+	(source org-change-overview--source))
+    (when (and marker (buffer-live-p source) (marker-buffer marker))
+      (let ((window (get-buffer-window source t)))
+	(if (window-live-p window)
+	    (with-selected-window window
+	      (org-change--goto-change (marker-position marker)))
+	  (with-current-buffer source
+	    (goto-char (marker-position marker))
+	    (org-change--reveal)))))))
+
+(defun org-change-overview--follow ()
+  "Show the current line's change in the source, from `post-command-hook'.
+Moving through the overview then moves point to the matching
+change without leaving the overview window."
+  (when (derived-mode-p 'org-change-overview-mode)
+    (org-change-overview--show-in-source)))
+
 (defun org-change-overview--apply (accept)
   "Accept or reject the change listed on this line, in its own buffer.
 ACCEPT is as in `org-change--apply-change'.  The overview is
@@ -1391,6 +1420,8 @@ that moves into the place of the one just dealt with."
 	(goto-char marker)
 	(org-change--apply-change accept)))
     (org-change-overview--render)
+    ;; Move the source view onto the change that takes this one's place.
+    (org-change-overview--show-in-source)
     (message "Change %s" (if accept "accepted" "rejected"))))
 
 (defun org-change-overview-accept ()
@@ -1432,16 +1463,18 @@ both as they are in the text and without their prefix.")
 (define-derived-mode org-change-overview-mode special-mode "Org Change"
   "Major mode for the buffer listing the changes of another buffer.
 
-Move with the arrow keys, press \\[org-change-overview-goto] to go
-to the change on this line, \\[org-change-overview-filter] to show
-only one author's changes, \\[revert-buffer] to refresh the list,
-and \\[quit-window] to close the window.  The accept and reject
-keys act on the change listed on this line, in the buffer being
-reviewed; there is nothing to type here, so they work without their
-prefix as well."
+Move with the arrow keys: the source buffer follows, showing the
+change on the current line.  Press \\[org-change-overview-goto] to
+jump into the source at that change, \\[org-change-overview-filter]
+to show only one author's changes, \\[revert-buffer] to refresh the
+list, and \\[quit-window] to close the window.  The accept and
+reject keys act on the change listed on this line, in the buffer
+being reviewed, and then move on to the next; there is nothing to
+type here, so they work without their prefix as well."
   (setq truncate-lines t)
   (setq-local revert-buffer-function
-	      (lambda (&rest _) (org-change-overview--render))))
+	      (lambda (&rest _) (org-change-overview--render)))
+  (add-hook 'post-command-hook #'org-change-overview--follow nil t))
 
 (defun org-change-overview ()
   "List every change of this buffer, one line each, in a side window.
@@ -1493,10 +1526,11 @@ The empty change `{!!}{!!}' is not counted."
 	       rep (if (= rep 1) "" "s")))))
 
 (defun org-change-toggle-deleted-text ()
-  "Show/hide deleted text."
+  "Show/hide deleted text, in the buffer and in any open overview."
   (interactive)
   (setq org-change-show-deleted (not org-change-show-deleted))
-  (org-change-fontify))
+  (org-change-fontify)
+  (org-change--overview-update))
 
 ;;; Generating changes from two versions
 
