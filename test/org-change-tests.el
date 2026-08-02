@@ -692,12 +692,12 @@ you type the replacement."
       (should-not disable-point-adjustment))))
 
 (ert-deftest org-change-test-keep-point-hook-installed ()
-  "`org-change-mode' installs the point-keeping pre-command hook."
+  "`org-change-mode' installs the point-keeping post-command hook."
   (with-temp-buffer
     (org-change-mode 1)
-    (should (memq #'org-change--keep-point pre-command-hook))
+    (should (memq #'org-change--keep-point post-command-hook))
     (org-change-mode -1)
-    (should-not (memq #'org-change--keep-point pre-command-hook))))
+    (should-not (memq #'org-change--keep-point post-command-hook))))
 
 (ert-deftest org-change-test-new-text-end-is-not-invisible ()
   "The end of an addition's new text is a restable, appendable position.

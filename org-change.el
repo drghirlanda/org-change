@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.13.0
+;; Version: 0.13.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -500,8 +500,11 @@ still for that command."
     edge))
 
 (defun org-change--keep-point ()
-  "Keep point at a hidden-markup edge, run from `pre-command-hook'.
-See `org-change--markup-edge-p' for why this is needed."
+  "Keep point at a hidden-markup edge, run from `post-command-hook'.
+Runs after the command has moved point and before Emacs checks
+`disable-point-adjustment', so it catches both typing that leaves
+point at an edge and motion that lands on one.  See
+`org-change--markup-edge-p' for why this is needed."
   (when (org-change--markup-edge-p)
     (setq disable-point-adjustment t)))
 
@@ -1958,17 +1961,18 @@ is emitted for each entry in `org-change-authors'."
             map)
   (if org-change-mode
       (progn
-	(add-hook 'pre-command-hook #'org-change--keep-point nil t)
 	(add-hook 'post-self-insert-hook #'org-change--erase-extra-space 0 t)
 	(add-hook 'after-change-functions #'org-change--after-change nil t)
 	(add-hook 'post-command-hook #'org-change--cleanup-empty nil t)
+	;; After cleanup, so it reads the point cleanup leaves behind.
+	(add-hook 'post-command-hook #'org-change--keep-point t t)
 	(org-change--setup-export)
 	(setq-local org-change--extra-space-pos nil)
 	(org-change-fontify))
-    (remove-hook 'pre-command-hook #'org-change--keep-point t)
     (remove-hook 'post-self-insert-hook #'org-change--erase-extra-space t)
     (remove-hook 'after-change-functions #'org-change--after-change t)
     (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
+    (remove-hook 'post-command-hook #'org-change--keep-point t)
     (org-change--forget-extra-space)
     (setq org-change--fold-restore nil)
     (org-change--remove-overlays)))
