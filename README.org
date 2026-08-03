@@ -167,6 +167,8 @@ When several people have marked changes, you can review one at a time. In the ov
 
 By default, org-change hides replaced text and shows deleted text with a cross. You can choose to show this text by setting ~org-change-show-deleted~ to a non-nil value. The text will then be shown in the customizable face ~org-change-deleted-face~ after the change markup, and will be read-only. This is similar to some word processors, where deleted text is shown as strike-through (but you don't have to use strike-through).
 
+To turn this on and off as you work, call ~M-x org-change-toggle-deleted-text~; it flips ~org-change-show-deleted~ and re-displays the buffer. If a change overview (see [[A bird's eye view of the changes]]) is open, it is refreshed too, so a replacement there gains or loses its removed text (shown as =new✗old=) to match.
+
 Spaces in the shown deleted text are easy to miss, so each is displayed as a dash (=-=). This affects the display only; the buffer text is unchanged. Customize ~org-change-deleted-space~ to use a different string (set it to =" "= to keep spaces as spaces).
 
 * Re-fontifying
