@@ -102,6 +102,8 @@ In org-mode, if the target change is hidden inside a folded heading, the jump re
 
 To move sections of text from one place to another, you can use the key sequences ~C-` w~ for killing (Emacspeak for "cutting") and ~C-` y~ for yanking (Emacspeak for "pasting"). These work like ~C-w~ and ~C-y~ but mark the killed text as a deletion and the yanked text as an addition.
 
+With no region active, ~C-` w~ acts on the change under point, so you can move something you have already added or replaced without having to select it around its invisible markers. Its new text is put on the kill ring and removed here: an addition is taken away entirely, while a replacement is left as a deletion of its old text (which stays deleted where it is). A ~C-` y~ at the destination re-adds the text there. If point is not on a change, or the change is a plain deletion with no new text to move, ~C-` w~ says so in the echo area and changes nothing.
+
 ** Accepting and rejecting changes
 
 Key sequences are also provided to accept or reject changes:

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.13.1
+;; Version: 0.14.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -556,12 +556,53 @@ type the new text."
       (org-change--mark-change old-text ""))))
 
 (defun org-change-kill ()
-  "Like `org-change-delete', but kill (cut) rather than delete text.
-Used together with `org-change-yank' to move text around."
+  "Kill (cut) text as a deletion, or the change under point, for moving.
+With an active region this works like `\\[kill-region]' but marks
+the cut text as a deletion, so `org-change-yank' can re-add it
+elsewhere.  With no region it acts on the change under point: its
+new text goes on the kill ring and is removed here -- an addition
+is taken away entirely, a replacement is left as a deletion of its
+old text -- ready to yank where it belongs.  Says so in the echo
+area when there is no change at point, or the change has no new
+text to move."
   (interactive)
-  (when (use-region-p)
-    (kill-ring-save (region-beginning) (region-end)))
-  (org-change-delete))
+  (if (use-region-p)
+      (progn
+	(kill-ring-save (region-beginning) (region-end))
+	(org-change-delete))
+    (org-change--kill-change)))
+
+(defun org-change--kill-change ()
+  "Cut the new text of the change under point, for moving.
+See `org-change-kill'."
+  (let ((change (org-change--at-change)))
+    (if (null change)
+	(message "No change at point")
+      ;; Capture everything from the match data before `--decode', whose
+      ;; own string matching would clobber it.
+      (let* ((beg (car change))
+	     (end (cdr change))
+	     (new-raw (match-string-no-properties 1))
+	     (old-raw (match-string-no-properties 2))
+	     (pair-end (+ (match-end 2) 2))	; just after {!new!}{!old!}
+	     (comment (buffer-substring-no-properties pair-end end))
+	     (old (org-change--decode old-raw)))
+	(if (equal new-raw "")
+	    (message "The change here has no new text to move")
+	  (kill-new (org-change--decode new-raw))
+	  (let ((inhibit-read-only t))
+	    (org-change--remove-overlays beg end)
+	    (delete-region beg end)
+	    (goto-char beg)
+	    (if (equal old "")
+		;; A pure addition: take it away and close the gap it leaves.
+		(org-change--join-whitespace beg)
+	      ;; A replacement or deletion keeps its old text marked deleted.
+	      (insert (format "{!!}{!%s!}" (org-change--encode old)) comment)
+	      (org-change-fontify beg (point))
+	      (goto-char beg)))
+	  (org-change--overview-update)
+	  (message "Change cut onto the kill ring"))))))
 
 (defun org-change-yank ()
   "Yank (paste) text and mark it as an addition.
@@ -1151,7 +1192,7 @@ time."
   '((org-change-add-key . "Mark the region as an addition (or start typing new text)")
     (org-change-delete-key . "Mark the region as a deletion")
     (org-change-replace-key . "Replace the region with new text")
-    (org-change-kill-key . "Kill (cut) the region as a deletion")
+    (org-change-kill-key . "Kill (cut) the region, or the change at point, to move")
     (org-change-yank-key . "Yank (paste) as an addition")
     (org-change-accept-key . "Accept the change at point (or in the region)")
     (org-change-reject-key . "Reject the change at point (or in the region)")

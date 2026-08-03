@@ -1201,6 +1201,73 @@ placeholder must not survive into the restored text."
   (should-not (org-change-tests--reject-round-trip
 	       "the quick brown fox" #'org-change-kill)))
 
+(ert-deftest org-change-test-kill-cuts-addition-at-point ()
+  "With no region, kill takes away the addition under point and copies it."
+  (with-temp-buffer
+    (insert "a {!added!}{!!} b")
+    (org-change-mode 1)
+    (goto-char 6)			; inside "added"
+    (org-change-kill)
+    (should (equal (current-kill 0) "added"))
+    (should (equal (buffer-string) "a b"))))
+
+(ert-deftest org-change-test-kill-cuts-replacement-new-text ()
+  "Kill on a replacement copies the new text and leaves a deletion of the old."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char 6)			; inside "new"
+    (org-change-kill)
+    (should (equal (current-kill 0) "new"))
+    (should (equal (buffer-string) "a {!!}{!old!} b"))))
+
+(ert-deftest org-change-test-kill-keeps-comment-on-replacement ()
+  "Cutting a replacement's new text keeps its author and comment."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!}{!@SG a note!} b")
+    (org-change-mode 1)
+    (goto-char 6)
+    (org-change-kill)
+    (should (equal (buffer-string) "a {!!}{!old!}{!@SG a note!} b"))))
+
+(ert-deftest org-change-test-kill-with-no-change-says-so ()
+  "Kill off any change, with no region, reports it and changes nothing."
+  (with-temp-buffer
+    (insert "plain text")
+    (org-change-mode 1)
+    (goto-char 3)
+    (let ((msg nil))
+      (cl-letf (((symbol-function 'message)
+		 (lambda (fmt &rest args) (setq msg (apply #'format fmt args)))))
+	(org-change-kill))
+      (should (equal msg "No change at point")))
+    (should (equal (buffer-string) "plain text"))))
+
+(ert-deftest org-change-test-kill-deletion-has-nothing-to-move ()
+  "A pure deletion has no new text, so kill reports it and leaves it be."
+  (with-temp-buffer
+    (insert "a {!!}{!gone!} b")
+    (org-change-mode 1)
+    (goto-char 6)
+    (let ((msg nil))
+      (cl-letf (((symbol-function 'message)
+		 (lambda (fmt &rest args) (setq msg (apply #'format fmt args)))))
+	(org-change-kill))
+      (should (string-match-p "no new text" msg)))
+    (should (equal (buffer-string) "a {!!}{!gone!} b"))))
+
+(ert-deftest org-change-test-kill-then-yank-moves-a-change ()
+  "Cutting a change and yanking re-adds its text as an addition elsewhere."
+  (with-temp-buffer
+    (insert "a {!moved!}{!!} b c")
+    (org-change-mode 1)
+    (goto-char 6)			; inside "moved"
+    (org-change-kill)			; addition gone, "moved" on the kill ring
+    (should (equal (buffer-string) "a b c"))
+    (goto-char (point-max))
+    (org-change-yank)
+    (should (equal (buffer-string) "a b c{!moved!}{!!}"))))
+
 (ert-deftest org-change-test-rejecting-a-diff-restores-the-old-version ()
   "Rejecting every change from a diff gives back the old version verbatim.
 Word-level diffs split text on space runs, so a mishandled
