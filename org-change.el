@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.14.0
+;; Version: 0.15.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -370,6 +370,25 @@ the result carries `org-change-deleted-face'."
    (replace-regexp-in-string " " org-change-deleted-space text t t)
    'face 'org-change-deleted-face))
 
+(defun org-change--protect (beg end)
+  "Make the change markup between BEG and END read-only.
+This stops an errant keystroke from deleting a delimiter and
+breaking the change syntax.  `rear-nonsticky' keeps the edges
+insertable, so you can still type just before, after, and inside
+a change, and the accept/reject commands bypass it by binding
+`inhibit-read-only'."
+  (when (< beg end)
+    (with-silent-modifications
+      (let ((inhibit-read-only t))
+	(put-text-property beg end 'read-only t)
+	(put-text-property beg end 'rear-nonsticky '(read-only))))))
+
+(defun org-change--unprotect (beg end)
+  "Remove org-change read-only protection between BEG and END."
+  (with-silent-modifications
+    (let ((inhibit-read-only t))
+      (remove-text-properties beg end '(read-only nil rear-nonsticky nil)))))
+
 (defun org-change-fontify (&optional rbeg rend)
   "Fontify change markup using overlays.
 Called automatically when Org Change mode starts.  Optional
@@ -385,6 +404,7 @@ echo area is needed for other things."
     (setq rbeg (or rbeg (point-min))
 	  rend (or rend (point-max)))
     (org-change--remove-overlays rbeg rend)
+    (org-change--unprotect rbeg rend)
     (save-excursion
       (goto-char rbeg)
       (while (org-change--search-forward rend t)
@@ -425,6 +445,8 @@ echo area is needed for other things."
 	    (org-change--make-overlay full-beg full-end
 				      'display org-change-deleted-marker
 				      'face face)
+	    ;; Nothing here is editable, so protect the whole change.
+	    (org-change--protect full-beg full-end)
 	    (when org-change-show-deleted
 	      ;; Also show old text after the marker
 	      (org-change--after-string-overlay
@@ -445,6 +467,9 @@ echo area is needed for other things."
 				      'face face)
 	    ;; Hide !}{!old!} and optional {!comment!}
 	    (org-change--make-overlay mid-beg full-end 'display "")
+	    ;; Protect the markup, leaving the new text between it editable.
+	    (org-change--protect open-beg open-end)
+	    (org-change--protect mid-beg full-end)
 	    (when (and org-change-show-deleted (not (equal old-text "")))
 	      ;; Show old text after the change
 	      (org-change--after-string-overlay
@@ -1071,7 +1096,9 @@ author stamped on the change is kept; an empty comment removes it."
 	   (comment (org-change--join-comment author new-note))
 	   (markup (if (equal comment "")
 		       ""
-		     (format "{!%s!}" (org-change--encode comment)))))
+		     (format "{!%s!}" (org-change--encode comment))))
+	   ;; The old comment markup is read-only; rewrite it anyway.
+	   (inhibit-read-only t))
       (delete-region pair-end end)
       (save-excursion
 	(goto-char pair-end)
@@ -1719,12 +1746,14 @@ restores it as well."
    (list (if current-prefix-arg
 	     (cons 'git (read-string "New version -- git revision: " "HEAD"))
 	   (cons 'file (read-file-name "New version file: " nil nil t)))))
-  (let* ((base (buffer-string))
+  (let* ((base (buffer-substring-no-properties (point-min) (point-max)))
 	 (incoming (pcase source
 		     (`(file . ,f) (org-change--file-string f))
 		     (`(git . ,rev) (org-change--git-string rev))
 		     (_ (user-error "Invalid diff source: %S" source))))
-	 (markup (org-change--diff-to-markup base incoming)))
+	 (markup (org-change--diff-to-markup base incoming))
+	 ;; The buffer may already carry read-only change markup.
+	 (inhibit-read-only t))
     (atomic-change-group
       (delete-region (point-min) (point-max))
       (insert markup)
@@ -1911,9 +1940,11 @@ comment, and return a string appropriate to BACKEND."
   "Replace change markup in buffer before org parses it for BACKEND.
 This runs on a temporary copy of the buffer via
 `org-export-before-processing-functions', so modifications are
-safe and do not affect the original buffer."
+safe and do not affect the original buffer.  The copy carries the
+read-only markup properties, so editing is enabled here."
   (goto-char (point-min))
-  (while (org-change--search-forward nil t)
+  (let ((inhibit-read-only t))
+   (while (org-change--search-forward nil t)
     (let* ((new-text (org-change--decode (match-string 1)))
 	   (old-text (org-change--decode (match-string 2)))
 	   (comment (org-change--decode (or (match-string 3) "")))
@@ -1938,7 +1969,7 @@ safe and do not affect the original buffer."
 		      (funcall exporter old-text new-text comment)
 		    (user-error "Change markup not supported in %s export"
 				backend))))))))
-      (replace-match replacement t t))))
+      (replace-match replacement t t)))))
 
 (defun org-change-filter-final-output (text backend _)
   "Add the changes.sty package and author definitions to the preamble.
@@ -2016,7 +2047,8 @@ is emitted for each entry in `org-change-authors'."
     (remove-hook 'post-command-hook #'org-change--keep-point t)
     (org-change--forget-extra-space)
     (setq org-change--fold-restore nil)
-    (org-change--remove-overlays)))
+    (org-change--remove-overlays)
+    (org-change--unprotect (point-min) (point-max))))
 
 (provide 'org-change)
 

@@ -46,7 +46,7 @@ the buffer."
 GROUP 1 keeps the new text (accept all), GROUP 2 the old text
 \(reject all); equal text is left as is."
   (with-temp-buffer
-    (insert markup)
+    (insert (substring-no-properties markup))
     (goto-char (point-min))
     (while (org-change--search-forward nil t)
       (replace-match (org-change--decode (or (match-string group) "")) t t))
@@ -719,6 +719,87 @@ point off this position; a zero-width `display' does not."
     (re-search-forward "new")		; end of the new text, before `!}'
     (insert "X")
     (should (string-match-p "{!newX!}{!old!}" (buffer-string)))))
+
+(ert-deftest org-change-test-markup-delimiters-are-read-only ()
+  "Ordinary editing cannot delete a change's markup."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "{!")		; point at the start of the new text
+    (should-error (delete-char -1))	; backspace over the read-only "!"
+    ;; and the hidden old text is protected too
+    (goto-char (point-min))
+    (search-forward "old")
+    (should-error (delete-char -1))))
+
+(ert-deftest org-change-test-deletion-markup-is-read-only ()
+  "A pure deletion is protected whole; its old text cannot be edited."
+  (with-temp-buffer
+    (insert "a {!!}{!gone!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "gone")
+    (should-error (delete-char -1))))
+
+(ert-deftest org-change-test-new-text-stays-editable ()
+  "The new text between the protected markup can still be edited."
+  (with-temp-buffer
+    (insert "a {!new!}{!!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "new")		; append at the end of the new text
+    (insert "er")
+    (should (string-match-p "{!newer!}" (buffer-string)))
+    (search-backward "newer")		; and edit inside it
+    (forward-char 1)
+    (insert "X")
+    (should (string-match-p "{!nXewer!}" (buffer-string)))))
+
+(ert-deftest org-change-test-can-type-around-a-change ()
+  "Text can be inserted just before and just after a protected change."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "{!old!}")		; just after the change
+    (insert "Z")
+    (goto-char (point-min))
+    (search-forward "a ")		; just before the change
+    (insert "Y")
+    (should (equal (buffer-string) "a Y{!new!}{!old!}Z b"))))
+
+(ert-deftest org-change-test-accept-bypasses-read-only ()
+  "Accepting works even though the markup is read-only."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "new")
+    (org-change-accept)
+    (should (equal (buffer-string) "a new b"))))
+
+(ert-deftest org-change-test-comment-bypasses-read-only ()
+  "Commenting rewrites the read-only comment markup."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "new")
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "note")))
+      (org-change-comment))
+    (should (string-match-p "{!new!}{!old!}{!note!}" (buffer-string)))))
+
+(ert-deftest org-change-test-disabling-mode-clears-read-only ()
+  "Turning the mode off makes the former markup editable again."
+  (with-temp-buffer
+    (insert "a {!new!}{!old!} b")
+    (org-change-mode 1)
+    (org-change-mode -1)
+    (goto-char (point-min))
+    (search-forward "{!")
+    (delete-char -1)			; no error now
+    (should (equal (buffer-string) "a {new!}{!old!} b"))))
 
 (ert-deftest org-change-test-deleted-spaces-shown-as-dashes ()
   "Displayed deleted text shows spaces as dashes, leaving the buffer intact."

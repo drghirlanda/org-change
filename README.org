@@ -27,7 +27,7 @@ org-change uses a two-group syntax where the first group contains the new text a
 #+begin_src org
   {!new text!}{!old text!}
 #+end_src
-Overlays hide the markup and old text, so you end up seeing only "new text." To indicate an addition, the old text group is empty:
+Overlays hide the markup and old text, so you end up seeing only "new text." The hidden markup and old text are also made read-only, so an errant keystroke cannot delete a delimiter and break a change; you can still type freely just before, after, and inside the new text, and the change commands (accept, reject, comment, and the rest) edit the markup as usual. To indicate an addition, the old text group is empty:
 #+begin_src org
   {!new text!}{!!}
 #+end_src
@@ -57,7 +57,7 @@ A change cannot contain org-change delimiters: the two-character sequences ~{!~ 
 The escaping is undone automatically when you accept, reject, or export the change.
 
 Two things to keep in mind:
-- Escaping happens for text taken from a *region* (add, delete, replace, kill/yank). Text you *type by hand* into a change is inserted verbatim, so a hand-typed ~{!~ or ~!}~ is not escaped. This is a deliberate trade-off: it is a rare thing to do, and intercepting every keystroke would be intrusive.
+- Escaping happens for text taken from a *region* (add, delete, replace, kill/yank). Text you *type by hand* into a change is inserted verbatim, so a hand-typed ~{!~ or ~!}~ is not escaped.
 - In the annotated buffer you will see the backslash in the rare escaped change (=a!\}b=). It disappears when the change is accepted, rejected, or exported.
 
 * Change manipulation
