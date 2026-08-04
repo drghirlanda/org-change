@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.16.0
+;; Version: 0.16.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -729,10 +729,12 @@ addition, and deleted as soon as point leaves."
   "If point is inside a change, return (BEG . END) of the match.
 Also sets match data for `org-change--regexp'."
   (save-excursion
-    (let ((pos (point))
-	  (limit (max (point-min) (- (point) 1000))))
-      ;; Search backward then forward to find a change containing point
-      (goto-char limit)
+    (let ((pos (point)))
+      ;; Scan from the start: a change can be arbitrarily large -- its new
+      ;; text may span paragraphs and blank lines -- so its opening `{!'
+      ;; may lie far before point.  The scan stops at the first change that
+      ;; begins after point, so it only reads as far as it must.
+      (goto-char (point-min))
       (catch 'found
 	(while (org-change--search-forward nil t)
 	  (when (and (<= (match-beginning 0) pos)

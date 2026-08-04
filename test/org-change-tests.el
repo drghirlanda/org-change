@@ -1430,6 +1430,22 @@ are joined, so indentation survives."
   (should (equal (org-change-tests--apply-at "a\n{!!}{!b!}\nc" 5 t)
 		 "a\nc")))
 
+(ert-deftest org-change-test-large-change-is-found-from-deep-inside ()
+  "A change whose new text spans blank lines and thousands of characters
+is still recognized -- and accepted -- from a point far inside it."
+  (with-temp-buffer
+    (let ((big (mapconcat #'identity (make-list 80 "some words here") "\n\n")))
+      (should (> (length big) 1000))
+      (insert (format "intro\n\n{!%s!}{!old text!} tail" big))
+      (org-change-mode 1)
+      (goto-char (point-max))
+      (search-backward "some words here")	; deep inside the new text
+      (should (org-change--at-change))
+      (org-change-accept)
+      (should (string-match-p (regexp-quote big) (buffer-string)))
+      (should-not (string-match-p "{!" (buffer-string)))
+      (should-not (string-match-p "old text" (buffer-string))))))
+
 (ert-deftest org-change-test-reject-closes-the-gap-left-by-an-added-line ()
   "Rejecting an added line must not leave an empty line either."
   (should (equal (org-change-tests--apply-at "a\n{!b!}{!!}\nc" 5 nil)
