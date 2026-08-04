@@ -62,13 +62,14 @@ Two things to keep in mind:
 
 * Change manipulation
 
-org-change provides key sequences to easily manipulate change markup. All key sequences start with ~C-`~ (control + left quote). Not the prettiest, but few control prefixes are free. It's the curse of keymensionality. To change it, see section [[Customization]]. Press ~C-` h~ at any time for a summary of the key bindings, each with a short description.
+All org-change key sequences to manipulate change markup start with ~C-`~ (control + left quote). Not the prettiest, but few control prefixes are free. It's the curse of keymensionality. To change the prefix, see section [[Customization]]. Press ~C-` h~ at any time for a summary of the key bindings.
 
-The key sequences are:
+** Basic key sequences
+
 - ~C-` a~ :: for additions.
 - ~C-` d~ :: for deletions.
 - ~C-` r~ :: for replacements.
-All these act on the active region, marking it as added, deleted, or replaced text. In the case of replacement, the region is "deleted" (that is, tucked away in the hidden part of the change markup) and you can enter text in its place. You can also use ~C-` a~ without marking a region, in which case you can start entering new text.
+All these act on the active region, marking it as added, deleted, or replaced text. In the case of replacement, the region is "deleted" (that is, tucked away in the hidden part of the change markup) and you can enter text in its place. You can also use ~C-` a~ without marking a region, and what you type next is marked as an addition.
 
 ** Moving between changes
 
@@ -77,13 +78,14 @@ To jump from change to change, use:
 - ~C-` p~ :: move to the previous change.
 Point lands at the beginning of the change. If point is inside a change, these move to the one after or before it.
 
-** A bird's eye view of the changes
+** Overview of all changes
 
 Press ~C-` o~ to open a side window listing every change in the buffer, one line each, prefixed with the line it is on. A change is summarized by the first line of its new text; a deletion, having none, is shown as its old text behind the deleted marker (=✗old text=). When ~org-change-show-deleted~ is on (see [[Showing deleted text]]), a replacement shows its removed text as well, as =new✗old=. The window is selected right away, so you can start moving through the list. In it:
 - ~up~ / ~down~ :: move from change to change. The buffer being reviewed follows along, showing (and revealing, if folded) the change on the current line, so you preview each without leaving the list.
 - ~RET~ :: jump into the buffer being reviewed, at the change on this line.
+- ~e~ :: edit the change on this line. Focus moves to it in the source window, with point in its new text, so you can type. Accepting or rejecting it there (with the usual keys) returns you to the list; ~C-` g~ instead aborts, restoring the change to how it was when you started, and returns you to the list.
 - ~a~ :: filter the list to one author, to the unattributed changes, or back to all.
-- ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed, not on the list, and then the source view moves on to the change that takes its place. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
+- ~k~ / ~x~ :: accept or reject the change on this line. It acts on the buffer being reviewed and moves point to the next change. There is nothing to type in the list, so the accept and reject keys work without their ~C-`~ prefix; the full sequences work too, and both follow the keys you have customized.
 - ~g~ :: refresh the list, if you have edited the buffer since opening it.
 - ~q~ :: close the window.
 Accepting or rejecting from the list refreshes it and leaves the cursor where it is, so the next change moves up into place: you can work down a document without moving at all. The list also keeps up with the buffer itself: accepting or rejecting there, whether one change or a whole region, refreshes it, so it never shows a change that is gone. It does not follow other edits, so press ~g~ after adding changes. The width and the side of the frame the window opens on are ~org-change-overview-width~ and ~org-change-overview-side~.

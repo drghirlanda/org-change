@@ -1528,6 +1528,58 @@ opened, are gone afterwards."
     (should (eq (current-buffer) source))
     (should (equal (org-change--at-change) (cons 16 26)))))
 
+(ert-deftest org-change-test-overview-edit-starts-a-session ()
+  "`e' moves into the source, on the change's new text, and arms an edit."
+  (org-change-tests--with-overview "a {!new!}{!old!} b"
+    (org-change-overview-edit)
+    (with-current-buffer source
+      (should org-change--edit-session)
+      (should (equal (plist-get org-change--edit-session :snapshot)
+		     "{!new!}{!old!}"))
+      ;; point is inside the new text, so typing extends the change
+      (should (org-change--at-change))
+      (insert "X")
+      (should (string-match-p "{!Xnew!}\\|{!nXew!}\\|{!neXw!}\\|{!newX!}"
+			      (buffer-string))))))
+
+(ert-deftest org-change-test-overview-edit-abort-restores-change ()
+  "`org-change-abort-edit' restores the change and clears the session."
+  (org-change-tests--with-overview "a {!new!}{!old!} b"
+    (org-change-overview-edit)
+    (with-current-buffer source
+      (goto-char (point-min))
+      (search-forward "new")
+      (insert "XY")			; edit the new text
+      (should (string-match-p "{!newXY!}" (buffer-string)))
+      (org-change-abort-edit))		; this returns focus to the overview
+    (should (equal (with-current-buffer source (buffer-string))
+		   "a {!new!}{!old!} b"))
+    (should (null (buffer-local-value 'org-change--edit-session source)))))
+
+(ert-deftest org-change-test-overview-edit-watch-finishes-on-resolve ()
+  "Resolving the edited change ends the session (the watcher detects it)."
+  (org-change-tests--with-overview "a {!new!}{!old!} b"
+    (org-change-overview-edit)
+    (with-current-buffer source
+      (should org-change--edit-session)
+      (goto-char (point-min))
+      (search-forward "new")
+      (org-change-accept)		; resolves the change
+      (org-change--edit-watch))		; the post-command hook would run this
+    (should (null (buffer-local-value 'org-change--edit-session source)))
+    (should (equal (with-current-buffer source (buffer-string)) "a new b"))))
+
+(ert-deftest org-change-test-overview-edit-watch-keeps-session-while-editing ()
+  "Editing the new text does not end the session."
+  (org-change-tests--with-overview "a {!new!}{!old!} b"
+    (org-change-overview-edit)
+    (with-current-buffer source
+      (goto-char (point-min))
+      (search-forward "new")
+      (insert "Z")
+      (org-change--edit-watch)
+      (should org-change--edit-session))))
+
 (ert-deftest org-change-test-overview-accepts-in-the-source-buffer ()
   "The accept key acts on the change in the buffer being reviewed."
   (org-change-tests--with-overview "a {!x!}{!y!} b {!p!}{!q!} c"

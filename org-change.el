@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.15.0
+;; Version: 0.16.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -178,6 +178,11 @@ export."
 
 (defcustom org-change-help-key (kbd "C-` h")
   "Keybinding for `org-change-help'."
+  :type 'key-sequence
+  :group 'org-change)
+
+(defcustom org-change-abort-key (kbd "C-` g")
+  "Keybinding for `org-change-abort-edit'."
   :type 'key-sequence
   :group 'org-change)
 
@@ -1232,6 +1237,7 @@ time."
     (org-change-overview-key . "List every change in a side window")
     (org-change-info-key . "Report the number of additions, deletions, replacements")
     (org-change-fontify-key . "Re-fontify the buffer")
+    (org-change-abort-key . "Abort a change edit started from the overview")
     (org-change-help-key . "Show this help"))
   "Rows of (KEY-VARIABLE . DESCRIPTION) for `org-change-help'.")
 
@@ -1505,6 +1511,96 @@ that moves into the place of the one just dealt with."
   (interactive)
   (org-change-overview--apply nil))
 
+;;; Editing a change from the overview
+
+(defvar-local org-change--edit-session nil
+  "State for a change being edited from the overview, or nil.
+A plist with :overview (the overview buffer to return to),
+:marker (a marker kept on the change's start) and :snapshot (the
+change's original markup, restored by `org-change-abort-edit').")
+
+(defun org-change--end-edit-session ()
+  "Tear down any edit-session state in the current buffer."
+  (when org-change--edit-session
+    (let ((marker (plist-get org-change--edit-session :marker)))
+      (when (markerp marker) (set-marker marker nil)))
+    (setq org-change--edit-session nil))
+  (remove-hook 'post-command-hook #'org-change--edit-watch t))
+
+(defun org-change--finish-edit ()
+  "Clear the edit session and return to its overview window."
+  (let ((overview (plist-get org-change--edit-session :overview)))
+    (org-change--end-edit-session)
+    (when (buffer-live-p overview)
+      (let ((window (get-buffer-window overview)))
+	(when (window-live-p window) (select-window window)))
+      (with-current-buffer overview (org-change-overview--render)))))
+
+(defun org-change--edit-watch ()
+  "Return to the overview once the edited change has been resolved.
+Runs from `post-command-hook' in the source buffer: when the
+change no longer begins at its marker -- because it was accepted
+or rejected -- the edit is finished."
+  (let* ((session org-change--edit-session)
+	 (marker (and session (plist-get session :marker))))
+    (when (and (markerp marker) (marker-buffer marker))
+      (unless (save-excursion
+		(goto-char (marker-position marker))
+		(looking-at-p org-change--regexp))
+	(org-change--finish-edit)))))
+
+(defun org-change-overview-edit ()
+  "Edit the change on this line in the buffer being reviewed.
+Focus moves to the change in the source window, point in its new
+text.  Accepting or rejecting it there returns here;
+\\<org-change-mode-map>\\[org-change-abort-edit] aborts, restoring
+the change, and returns here."
+  (interactive)
+  (let ((marker (org-change-overview--marker))
+	(source org-change-overview--source)
+	(overview (current-buffer))
+	(window (org-change-overview--source-window)))
+    (select-window window)
+    (org-change--goto-change (marker-position marker))
+    (with-current-buffer source
+      (org-change--end-edit-session)
+      (let ((change (save-excursion
+		      (goto-char (marker-position marker))
+		      (org-change--at-change))))
+	(when change
+	  (setq org-change--edit-session
+		(list :overview overview
+		      :marker (copy-marker (car change) t)
+		      :snapshot (buffer-substring-no-properties
+				 (car change) (cdr change))))
+	  (add-hook 'post-command-hook #'org-change--edit-watch nil t)
+	  ;; Put point in the new text, ready to type.
+	  (goto-char (min (+ (car change) 2) (cdr change))))))))
+
+(defun org-change-abort-edit ()
+  "Abort a change edit begun from the overview.
+Restore the change to its state when the edit began, and return to
+the overview.  Does nothing when no such edit is in progress.
+See `org-change-overview-edit'."
+  (interactive)
+  (let ((session org-change--edit-session))
+    (if (not session)
+	(message "No change edit to abort")
+      (let* ((marker (plist-get session :marker))
+	     (snapshot (plist-get session :snapshot))
+	     (beg (marker-position marker)))
+	(save-excursion
+	  (goto-char beg)
+	  (let ((change (org-change--at-change))
+		(inhibit-read-only t))
+	    (when change
+	      (org-change--unprotect (car change) (cdr change))
+	      (delete-region (car change) (cdr change)))
+	    (goto-char beg)
+	    (insert snapshot)
+	    (org-change-fontify beg (+ beg (length snapshot)))))
+	(org-change--finish-edit)))))
+
 (defun org-change--bare-key (key)
   "Return the last event of KEY on its own, as a key sequence.
 The overview needs no prefix -- there is nothing to type there --
@@ -1518,6 +1614,7 @@ customized."
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "RET") #'org-change-overview-goto)
+    (define-key map "e" #'org-change-overview-edit)
     (define-key map "a" #'org-change-overview-filter)
     (dolist (row `((,org-change-accept-key . org-change-overview-accept)
 		   (,org-change-reject-key . org-change-overview-reject)))
@@ -1536,12 +1633,16 @@ both as they are in the text and without their prefix.")
 
 Move with the arrow keys: the source buffer follows, showing the
 change on the current line.  Press \\[org-change-overview-goto] to
-jump into the source at that change, \\[org-change-overview-filter]
-to show only one author's changes, \\[revert-buffer] to refresh the
-list, and \\[quit-window] to close the window.  The accept and
-reject keys act on the change listed on this line, in the buffer
-being reviewed, and then move on to the next; there is nothing to
-type here, so they work without their prefix as well."
+jump into the source at that change, \\[org-change-overview-edit]
+to edit it there (accepting or rejecting returns here, and
+\\<org-change-mode-map>\\[org-change-abort-edit]\
+\\<org-change-overview-mode-map> aborts and restores it),
+\\[org-change-overview-filter] to show only one author's changes,
+\\[revert-buffer] to refresh the list, and \\[quit-window] to close
+the window.  The accept and reject keys act on the change listed on
+this line, in the buffer being reviewed, and then move on to the
+next; there is nothing to type here, so they work without their
+prefix as well."
   (setq truncate-lines t)
   (setq-local revert-buffer-function
 	      (lambda (&rest _) (org-change-overview--render)))
@@ -2030,6 +2131,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-overview-key #'org-change-overview)
             (define-key map org-change-info-key #'org-change-info)
             (define-key map org-change-help-key #'org-change-help)
+            (define-key map org-change-abort-key #'org-change-abort-edit)
             map)
   (if org-change-mode
       (progn
@@ -2046,6 +2148,7 @@ is emitted for each entry in `org-change-authors'."
     (remove-hook 'post-command-hook #'org-change--cleanup-empty t)
     (remove-hook 'post-command-hook #'org-change--keep-point t)
     (org-change--forget-extra-space)
+    (org-change--end-edit-session)
     (setq org-change--fold-restore nil)
     (org-change--remove-overlays)
     (org-change--unprotect (point-min) (point-max))))
