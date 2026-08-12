@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.16.1
+;; Version: 0.17.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -29,7 +29,9 @@
 ;; org-change-replace (C-` r).  Accept or reject changes with
 ;; org-change-accept (C-` k) and org-change-reject (C-` x), or with
 ;; C-` K and C-` X to move to the next change as well.  Comment
-;; on a change with org-change-comment (C-` c).  Move between changes
+;; on a change with org-change-comment (C-` c).  Highlight a span and
+;; comment on it, without proposing a change, with
+;; org-change-annotate (C-` m).  Move between changes
 ;; with org-change-next-change (C-` n) and
 ;; org-change-previous-change (C-` p).  Count them with
 ;; org-change-info (C-` i), or list them in a side window with
@@ -156,6 +158,11 @@ export."
   :type 'key-sequence
   :group 'org-change)
 
+(defcustom org-change-annotate-key (kbd "C-` m")
+  "Keybinding for `org-change-annotate'."
+  :type 'key-sequence
+  :group 'org-change)
+
 (defcustom org-change-next-key (kbd "C-` n")
   "Keybinding for `org-change-next-change'."
   :type 'key-sequence
@@ -199,6 +206,11 @@ export."
 (defface org-change-comment-face
   '((t (:slant italic)))
   "Face for the comment shown after a change."
+  :group 'org-change)
+
+(defface org-change-annotation-face
+  '((t (:background "light goldenrod yellow")))
+  "Face for text highlighted by `org-change-annotate'."
   :group 'org-change)
 
 (defcustom org-change-overview-width 40
@@ -378,15 +390,19 @@ the result carries `org-change-deleted-face'."
 (defun org-change--protect (beg end)
   "Make the change markup between BEG and END read-only.
 This stops an errant keystroke from deleting a delimiter and
-breaking the change syntax.  `rear-nonsticky' keeps the edges
-insertable, so you can still type just before, after, and inside
-a change, and the accept/reject commands bypass it by binding
+breaking the change syntax.  Only the last character is made
+`rear-nonsticky', so text can still be typed just after the run --
+appending to a change, or typing on past it -- while insertion
+between two protected characters stays blocked: a keystroke cannot
+slip into the middle of a highlighted span.  Typing just before
+the run is allowed too, as `read-only' is front-nonsticky by
+default.  The accept/reject commands bypass all of this by binding
 `inhibit-read-only'."
   (when (< beg end)
     (with-silent-modifications
       (let ((inhibit-read-only t))
 	(put-text-property beg end 'read-only t)
-	(put-text-property beg end 'rear-nonsticky '(read-only))))))
+	(put-text-property (1- end) end 'rear-nonsticky '(read-only))))))
 
 (defun org-change--unprotect (beg end)
   "Remove org-change read-only protection between BEG and END."
@@ -457,6 +473,16 @@ echo area is needed for other things."
 	      (org-change--after-string-overlay
 	       full-end
 	       (org-change--deleted-display old-text))))
+	   ;; Annotation: the two sides are the same text, so there is no
+	   ;; change to show.  Highlight the text once and never show the
+	   ;; twin, even under `org-change-show-deleted'.  The whole span is
+	   ;; read-only: an annotation marks text without modifying it.
+	   ((equal new-text old-text)
+	    (org-change--make-overlay open-beg open-end 'display "")
+	    (org-change--make-overlay new-beg new-end
+				      'face 'org-change-annotation-face)
+	    (org-change--make-overlay mid-beg full-end 'display "")
+	    (org-change--protect full-beg full-end))
 	   ;; Addition or replacement: show new text
 	   (t
 	    ;; Hide {! before new text.  We collapse it to zero width with
@@ -584,6 +610,31 @@ type the new text."
     (if (equal old-text nil)
 	(user-error "Select text to be deleted")
       (org-change--mark-change old-text ""))))
+
+(defun org-change-annotate ()
+  "Highlight the active region and comment on it, without marking a change.
+The region's text is stored as both the old and new side of a
+change, so accepting and rejecting both keep it exactly as it is:
+an annotation points at text without proposing to modify it.  A
+comment is prompted for and stamped with the current author; an
+empty comment leaves a bare highlight."
+  (interactive)
+  (let ((text (org-change--get-region)))
+    (if (not text)
+	(user-error "Select text to annotate")
+      (let* ((note (string-trim (read-string "Comment: ")))
+	     (author (and org-change-author
+			  (not (string-empty-p org-change-author))
+			  org-change-author))
+	     (comment (org-change--join-comment author note))
+	     (markup (if (equal comment "")
+			 ""
+		       (format "{!%s!}" (org-change--encode comment))))
+	     (encoded (org-change--encode text)))
+	(org-change--consume-region)
+	(let ((beg (point)))
+	  (insert (format "{!%s!}{!%s!}" encoded encoded) markup)
+	  (org-change-fontify beg (point)))))))
 
 (defun org-change-kill ()
   "Kill (cut) text as a deletion, or the change under point, for moving.
@@ -1234,6 +1285,7 @@ time."
     (org-change-reject-and-next-key . "Reject the change, then go to the next one")
     (org-change-accept-reject-all-key . "Accept or reject every change, one by one")
     (org-change-comment-key . "Add or edit the change's comment")
+    (org-change-annotate-key . "Highlight the region and comment on it")
     (org-change-next-key . "Go to the next change")
     (org-change-previous-key . "Go to the previous change")
     (org-change-overview-key . "List every change in a side window")
@@ -1322,6 +1374,8 @@ old text is shown behind `org-change-deleted-marker' instead."
 	 (text (cond
 		;; A deletion has no new text: always show what was removed.
 		((equal new "") (concat org-change-deleted-marker old))
+		;; An annotation is the same on both sides: show it once.
+		((equal new old) new)
 		;; A replacement shows its removed text only when
 		;; `org-change-show-deleted' is on, as the buffer does.
 		((and org-change-show-deleted (not (equal old "")))
@@ -1673,9 +1727,10 @@ away.  See `org-change-overview-mode' for what the keys do."
 ;;; Counting changes
 
 (defun org-change--counts ()
-  "Return the list (ADDITIONS DELETIONS REPLACEMENTS) for the buffer.
-The empty change `{!!}{!!}' is not counted."
-  (let ((add 0) (del 0) (rep 0))
+  "Return the list (ADDITIONS DELETIONS REPLACEMENTS ANNOTATIONS).
+The empty change `{!!}{!!}' is not counted.  An annotation has the
+same text on both sides."
+  (let ((add 0) (del 0) (rep 0) (ann 0))
     (save-excursion
       (goto-char (point-min))
       (while (org-change--search-forward nil t)
@@ -1685,19 +1740,21 @@ The empty change `{!!}{!!}' is not counted."
 	   ((and (equal new "") (equal old "")))	; empty change: skip
 	   ((equal old "") (setq add (1+ add)))		; addition
 	   ((equal new "") (setq del (1+ del)))		; deletion
+	   ((equal new old) (setq ann (1+ ann)))	; annotation
 	   (t (setq rep (1+ rep)))))))			; replacement
-    (list add del rep)))
+    (list add del rep ann)))
 
 (defun org-change-info ()
-  "Show the number of additions, deletions, and replacements."
+  "Show the number of additions, deletions, replacements, and annotations."
   (interactive)
-  (pcase-let ((`(,add ,del ,rep) (org-change--counts)))
-    (if (zerop (+ add del rep))
+  (pcase-let ((`(,add ,del ,rep ,ann) (org-change--counts)))
+    (if (zerop (+ add del rep ann))
 	(message "No changes")
-      (message "%d addition%s, %d deletion%s, %d replacement%s"
+      (message "%d addition%s, %d deletion%s, %d replacement%s, %d annotation%s"
 	       add (if (= add 1) "" "s")
 	       del (if (= del 1) "" "s")
-	       rep (if (= rep 1) "" "s")))))
+	       rep (if (= rep 1) "" "s")
+	       ann (if (= ann 1) "" "s")))))
 
 (defun org-change-toggle-deleted-text ()
   "Show/hide deleted text, in the buffer and in any open overview."
@@ -1939,6 +1996,8 @@ The result is wrapped in @@latex:...@@ so org exports it verbatim."
 		   (format "\\added%s{%s}" opts new-text))
 		  ((equal new-text "")
 		   (format "\\deleted%s{%s}" opts old-text))
+		  ((equal new-text old-text)
+		   (format "\\highlight%s{%s}" opts new-text))
 		  (t
 		   (format "\\replaced%s{%s}{%s}" opts new-text old-text))))))
 
@@ -1976,7 +2035,8 @@ verbatim."
 	 (author (car split))
 	 (note (cdr split))
 	 (added (org-change--html-class "org-change-added" author))
-	 (deleted (org-change--html-class "org-change-deleted" author)))
+	 (deleted (org-change--html-class "org-change-deleted" author))
+	 (highlight (org-change--html-class "org-change-highlight" author)))
     (format "@@html:%s@@"
 	    (cond ((equal old-text "")
 		   (org-change--make-span
@@ -1987,6 +2047,11 @@ verbatim."
 		   (org-change--make-span
 		    deleted
 		    (concat old-text (org-change--make-span
+				      "org-change-comment" note))))
+		  ((equal new-text old-text)
+		   (org-change--make-span
+		    highlight
+		    (concat new-text (org-change--make-span
 				      "org-change-comment" note))))
 		  (t
 		   (concat
@@ -1999,8 +2064,9 @@ verbatim."
 (defun org-change--export-ascii (old-text new-text comment)
   "Export a change to plain text, as CriticMarkup.
 OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change: an
-addition becomes `{++new++}\=', a deletion `{--old--}\=', and a
-replacement `{~~old~>new~~}\='.  A comment follows as `{>>note<<}\=',
+addition becomes `{++new++}\=', a deletion `{--old--}\=', a
+replacement `{~~old~>new~~}\=', and an annotation (both sides alike)
+a highlight `{==text==}\='.  A comment follows as `{>>note<<}\=',
 carrying the author of an @ID prefix as `{>>ID: note<<}\=', which is
 how Emacs shows it.  The result is wrapped in @@ascii:...@@ so org
 exports it verbatim, without reading the markup as org syntax."
@@ -2011,6 +2077,8 @@ exports it verbatim, without reading the markup as org syntax."
 		      (format "{++%s++}" new-text))
 		     ((equal new-text "")
 		      (format "{--%s--}" old-text))
+		     ((equal new-text old-text)
+		      (format "{==%s==}" new-text))
 		     (t
 		      (format "{~~%s~>%s~~}" old-text new-text)))))
     (format "@@ascii:%s%s@@"
@@ -2128,6 +2196,7 @@ is emitted for each entry in `org-change-authors'."
             (define-key map org-change-accept-reject-all-key #'org-change-accept-reject-all)
             (define-key map org-change-fontify-key #'org-change-fontify)
             (define-key map org-change-comment-key #'org-change-comment)
+            (define-key map org-change-annotate-key #'org-change-annotate)
             (define-key map org-change-next-key #'org-change-next-change)
             (define-key map org-change-previous-key #'org-change-previous-change)
             (define-key map org-change-overview-key #'org-change-overview)

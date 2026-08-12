@@ -998,20 +998,20 @@ data `replace-match' needs."
   "Changes are counted by kind, ignoring the empty change."
   (with-temp-buffer
     (insert "{!a!}{!!} x {!!}{!b!} y {!c!}{!d!} z {!e!}{!!} {!!}{!!}")
-    (should (equal (org-change--counts) '(2 1 1)))))
+    (should (equal (org-change--counts) '(2 1 1 0)))))
 
 (ert-deftest org-change-test-info-message ()
   "`org-change-info' reports the counts in the minibuffer."
   (with-temp-buffer
     (insert "{!a!}{!!} {!!}{!b!} {!c!}{!d!}")
-    (should (member "1 addition, 1 deletion, 1 replacement"
+    (should (member "1 addition, 1 deletion, 1 replacement, 0 annotations"
 		    (org-change-tests--messages-while #'org-change-info)))))
 
 (ert-deftest org-change-test-info-plurals ()
   "The message pluralizes each count."
   (with-temp-buffer
     (insert "{!a!}{!!} {!e!}{!!}")
-    (should (member "2 additions, 0 deletions, 0 replacements"
+    (should (member "2 additions, 0 deletions, 0 replacements, 0 annotations"
 		    (org-change-tests--messages-while #'org-change-info)))))
 
 (ert-deftest org-change-test-info-no-changes ()
@@ -2033,6 +2033,150 @@ Return the resulting buffer text."
 		 (lambda (prompt &rest _) (setq asked prompt) nil)))
 	(org-change-accept-by-author))
       (should (equal asked "Accept 2 changes by SG? ")))))
+
+;;; Annotations (highlight a span and comment on it, without a change)
+
+(ert-deftest org-change-test-annotate-inserts-matching-sides ()
+  "`org-change-annotate' wraps the region as old and new alike, plus a comment."
+  (with-temp-buffer
+    (insert "a word b")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 3 7)		; "word"
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "why")))
+      (org-change-annotate))
+    (should (equal (buffer-string) "a {!word!}{!word!}{!why!} b"))))
+
+(ert-deftest org-change-test-annotate-allows-an-empty-comment ()
+  "An annotation with no comment is a bare highlight, both sides alike."
+  (with-temp-buffer
+    (insert "a word b")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 3 7)		; "word"
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "  ")))
+      (org-change-annotate))
+    (should (equal (buffer-string) "a {!word!}{!word!} b"))))
+
+(ert-deftest org-change-test-annotate-stamps-the-author ()
+  "The current author is stamped into the annotation's comment."
+  (with-temp-buffer
+    (insert "a word b")
+    (org-change-mode 1)
+    (org-change-tests--mark-region 3 7)		; "word"
+    (let ((org-change-author "SG"))
+      (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "note")))
+	(org-change-annotate)))
+    (should (equal (buffer-string) "a {!word!}{!word!}{!@SG note!} b"))))
+
+(ert-deftest org-change-test-annotate-needs-a-region ()
+  "With no region, `org-change-annotate' asks for one."
+  (with-temp-buffer
+    (insert "nothing selected")
+    (org-change-mode 1)
+    (should-error (org-change-annotate) :type 'user-error)))
+
+(ert-deftest org-change-test-annotation-shows-its-text-once ()
+  "A highlighted span is shown once, faced, not as a deletion."
+  (with-temp-buffer
+    (insert "a {!kept!}{!kept!}{!note!} b")
+    (org-change-mode 1)
+    (org-change-fontify)
+    ;; The text is faced with the annotation face ...
+    (let ((faced nil))
+      (dolist (ov (overlays-in (point-min) (point-max)))
+	(when (eq (overlay-get ov 'face) 'org-change-annotation-face)
+	  (setq faced (buffer-substring-no-properties
+		       (overlay-start ov) (overlay-end ov)))))
+      (should (equal faced "kept")))
+    ;; ... and never behind the deleted marker.
+    (should-not (member org-change-deleted-marker
+			(org-change-tests--displays)))))
+
+(ert-deftest org-change-test-annotation-hides-the-second-side ()
+  "Even with `org-change-show-deleted', the twin side is not shown again."
+  (let ((org-change-show-deleted t))
+    (with-temp-buffer
+      (insert "a {!kept!}{!kept!} b")
+      (org-change-mode 1)
+      (org-change-fontify)
+      (dolist (ov (overlays-in (point-min) (point-max)))
+	(let ((as (overlay-get ov 'after-string)))
+	  (when as
+	    (should-not (string-match-p "kept" as))))))))
+
+(ert-deftest org-change-test-annotation-is-read-only ()
+  "The highlighted text cannot be edited in place."
+  (with-temp-buffer
+    (insert "a {!kept!}{!kept!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "kept")		; inside the highlighted text
+    (should-error (delete-char -1))))
+
+(ert-deftest org-change-test-annotation-cannot-be-typed-into ()
+  "Typing inside a highlighted span is blocked; it is read-only throughout."
+  (with-temp-buffer
+    (insert "a {!kept!}{!kept!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "ke")		; between the read-only characters
+    (should-error (org-change-tests--type ?Z))))
+
+(ert-deftest org-change-test-accept-keeps-the-annotated-text ()
+  "Accepting an annotation leaves the text untouched."
+  (with-temp-buffer
+    (insert "a {!kept!}{!kept!}{!note!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "kept")
+    (org-change-accept)
+    (should (equal (buffer-string) "a kept b"))))
+
+(ert-deftest org-change-test-reject-keeps-the-annotated-text ()
+  "Rejecting an annotation leaves the text untouched, just like accepting."
+  (with-temp-buffer
+    (insert "a {!kept!}{!kept!}{!note!} b")
+    (org-change-mode 1)
+    (goto-char (point-min))
+    (search-forward "kept")
+    (org-change-reject)
+    (should (equal (buffer-string) "a kept b"))))
+
+(ert-deftest org-change-test-counts-annotations ()
+  "Annotations are counted apart from replacements."
+  (with-temp-buffer
+    (insert "{!a!}{!!} {!!}{!b!} {!c!}{!d!} {!e!}{!e!}")
+    (should (equal (org-change--counts) '(1 1 1 1)))))
+
+(ert-deftest org-change-test-info-reports-annotations ()
+  "`org-change-info' names the annotation count."
+  (with-temp-buffer
+    (insert "{!e!}{!e!}")
+    (should (member "0 additions, 0 deletions, 0 replacements, 1 annotation"
+		    (org-change-tests--messages-while #'org-change-info)))))
+
+(ert-deftest org-change-test-latex-exports-an-annotation ()
+  "An annotation becomes the changes package highlight."
+  (should (equal (org-change--export-latex "kept" "kept" "@SG note")
+		 "@@latex:\\highlight[id=SG, comment=note]{kept}@@")))
+
+(ert-deftest org-change-test-html-exports-an-annotation ()
+  "An annotation becomes a highlight span, its comment inside."
+  (should (equal (org-change--export-html "kept" "kept" "@SG note")
+		 (concat "@@html:"
+			 "<span class=\"org-change-highlight org-change-author-SG\">"
+			 "kept<span class=\"org-change-comment\">note</span></span>"
+			 "@@"))))
+
+(ert-deftest org-change-test-ascii-exports-an-annotation ()
+  "An annotation becomes CriticMarkup's highlight, with its comment."
+  (should (equal (org-change-tests--ascii "a {!kept!}{!kept!}{!a note!} b")
+		 "a @@ascii:{==kept==}{>>a note<<}@@ b")))
+
+(ert-deftest org-change-test-overview-shows-an-annotation-once ()
+  "The overview lists a highlight's text once, even with deleted text shown."
+  (let ((org-change-show-deleted t))
+    (org-change-tests--with-overview "a {!kept!}{!kept!}{!note!} b"
+      (should (equal (org-change-tests--overview-lines) '("kept"))))))
 
 (provide 'org-change-tests)
 
