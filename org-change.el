@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.17.0
+;; Version: 0.18.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -1988,18 +1988,23 @@ may be empty; the result is empty when both are."
   "Export a change to LaTeX.
 OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change; an
 @ID prefix in COMMENT is exported as the changes package author id.
-The result is wrapped in @@latex:...@@ so org exports it verbatim."
+Only the command syntax is wrapped in @@latex:...@@ export snippets;
+the content between them is left as bare org, so org exports it."
   (let* ((split (org-change--split-comment comment))
 	 (opts (org-change--latex-options (car split) (cdr split))))
-    (format "@@latex:%s@@"
-	    (cond ((equal old-text "")
-		   (format "\\added%s{%s}" opts new-text))
-		  ((equal new-text "")
-		   (format "\\deleted%s{%s}" opts old-text))
-		  ((equal new-text old-text)
-		   (format "\\highlight%s{%s}" opts new-text))
-		  (t
-		   (format "\\replaced%s{%s}{%s}" opts new-text old-text))))))
+    ;; The change content is left as bare org, wrapped only by
+    ;; `@@latex:...@@' export snippets around the command syntax, so
+    ;; org exports it -- emphasis, links, citations, math, and character
+    ;; escaping all apply -- while raw LaTeX passes through as fragments.
+    (cond ((equal old-text "")
+	   (format "@@latex:\\added%s{@@%s@@latex:}@@" opts new-text))
+	  ((equal new-text "")
+	   (format "@@latex:\\deleted%s{@@%s@@latex:}@@" opts old-text))
+	  ((equal new-text old-text)
+	   (format "@@latex:\\highlight%s{@@%s@@latex:}@@" opts new-text))
+	  (t
+	   (format "@@latex:\\replaced%s{@@%s@@latex:}{@@%s@@latex:}@@"
+		   opts new-text old-text)))))
 
 (defun org-change--latex-author-defs ()
   "Return \\definechangesauthor lines for every author in `org-change-authors'."
@@ -2029,37 +2034,29 @@ The result is wrapped in @@latex:...@@ so org exports it verbatim."
   "Export a change to HTML.
 OLD-TEXT, NEW-TEXT, and COMMENT are the elements of the change; an
 @ID prefix in COMMENT tags the spans with an org-change-author-ID
-class.  The result is wrapped in @@html:...@@ so org exports it
-verbatim."
+class.  Only the span tags are wrapped in @@html:...@@ export
+snippets; the content between them is left as bare org, so org
+exports it."
   (let* ((split (org-change--split-comment comment))
 	 (author (car split))
 	 (note (cdr split))
 	 (added (org-change--html-class "org-change-added" author))
 	 (deleted (org-change--html-class "org-change-deleted" author))
-	 (highlight (org-change--html-class "org-change-highlight" author)))
-    (format "@@html:%s@@"
-	    (cond ((equal old-text "")
-		   (org-change--make-span
-		    added
-		    (concat new-text (org-change--make-span
-				      "org-change-comment" note))))
-		  ((equal new-text "")
-		   (org-change--make-span
-		    deleted
-		    (concat old-text (org-change--make-span
-				      "org-change-comment" note))))
-		  ((equal new-text old-text)
-		   (org-change--make-span
-		    highlight
-		    (concat new-text (org-change--make-span
-				      "org-change-comment" note))))
-		  (t
-		   (concat
-		    (org-change--make-span
-		     added
-		     (concat new-text (org-change--make-span
-				       "org-change-comment" note)))
-		    (org-change--make-span deleted old-text)))))))
+	 (highlight (org-change--html-class "org-change-highlight" author))
+	 (cspan (org-change--make-span "org-change-comment" note)))
+    (cond ((equal old-text "")
+	   (format "@@html:<span class=\"%s\">@@%s@@html:%s</span>@@"
+		   added new-text cspan))
+	  ((equal new-text "")
+	   (format "@@html:<span class=\"%s\">@@%s@@html:%s</span>@@"
+		   deleted old-text cspan))
+	  ((equal new-text old-text)
+	   (format "@@html:<span class=\"%s\">@@%s@@html:%s</span>@@"
+		   highlight new-text cspan))
+	  (t
+	   (format
+	    "@@html:<span class=\"%s\">@@%s@@html:%s</span><span class=\"%s\">@@%s@@html:</span>@@"
+	    added new-text cspan deleted old-text)))))
 
 (defun org-change--export-ascii (old-text new-text comment)
   "Export a change to plain text, as CriticMarkup.
@@ -2068,28 +2065,30 @@ addition becomes `{++new++}\=', a deletion `{--old--}\=', a
 replacement `{~~old~>new~~}\=', and an annotation (both sides alike)
 a highlight `{==text==}\='.  A comment follows as `{>>note<<}\=',
 carrying the author of an @ID prefix as `{>>ID: note<<}\=', which is
-how Emacs shows it.  The result is wrapped in @@ascii:...@@ so org
-exports it verbatim, without reading the markup as org syntax."
+how Emacs shows it.  Only the CriticMarkup punctuation is wrapped in
+@@ascii:...@@ export snippets; the content between them is left as
+bare org, so org exports it."
   (let* ((split (org-change--split-comment comment))
 	 (author (car split))
 	 (note (cdr split))
-	 (text (cond ((equal old-text "")
-		      (format "{++%s++}" new-text))
-		     ((equal new-text "")
-		      (format "{--%s--}" old-text))
-		     ((equal new-text old-text)
-		      (format "{==%s==}" new-text))
-		     (t
-		      (format "{~~%s~>%s~~}" old-text new-text)))))
-    (format "@@ascii:%s%s@@"
-	    text
-	    (if (equal note "")
-		""
-	      (format "{>>%s%s<<}"
-		      (if (or (null author) (equal author ""))
-			  ""
-			(concat author ": "))
-		      note)))))
+	 ;; The comment goes in the final closing snippet, so no two
+	 ;; snippets sit adjacent.
+	 (cm (if (equal note "")
+		 ""
+	       (format "{>>%s%s<<}"
+		       (if (or (null author) (equal author ""))
+			   ""
+			 (concat author ": "))
+		       note))))
+    (cond ((equal old-text "")
+	   (format "@@ascii:{++@@%s@@ascii:++}%s@@" new-text cm))
+	  ((equal new-text "")
+	   (format "@@ascii:{--@@%s@@ascii:--}%s@@" old-text cm))
+	  ((equal new-text old-text)
+	   (format "@@ascii:{==@@%s@@ascii:==}%s@@" new-text cm))
+	  (t
+	   (format "@@ascii:{~~@@%s@@ascii:~>@@%s@@ascii:~~}%s@@"
+		   old-text new-text cm)))))
 
 (defvar org-change--exporters
   '((latex . org-change--export-latex)

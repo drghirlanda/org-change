@@ -220,7 +220,7 @@ It must not display `org-change-deleted-marker'."
   (with-temp-buffer
     (insert "a {!!}{!gone!} b")
     (org-change--before-processing 'latex)
-    (should (equal (buffer-string) "a @@latex:\\deleted{gone}@@ b"))))
+    (should (equal (buffer-string) "a @@latex:\\deleted{@@gone@@latex:}@@ b"))))
 
 ;;; Adjacent changes (comment/pair ambiguity)
 
@@ -231,8 +231,8 @@ as a comment of the first."
     (insert "{!new1!}{!old1!}{!new2!}{!old2!}")
     (org-change--before-processing 'latex)
     (should (equal (buffer-string)
-		   (concat "@@latex:\\replaced{new1}{old1}@@"
-			   "@@latex:\\replaced{new2}{old2}@@")))))
+		   (concat "@@latex:\\replaced{@@new1@@latex:}{@@old1@@latex:}@@"
+			   "@@latex:\\replaced{@@new2@@latex:}{@@old2@@latex:}@@")))))
 
 (ert-deftest org-change-test-at-change-picks-the-second-of-two-adjacent ()
   "Point in the second of two adjacent changes finds only that change."
@@ -282,7 +282,7 @@ and rejecting one of them must still touch only that one."
     (insert "{!new!}{!old!}{!cmt!}")
     (org-change--before-processing 'latex)
     (should (equal (buffer-string)
-		   "@@latex:\\replaced[comment=cmt]{new}{old}@@"))))
+		   "@@latex:\\replaced[comment=cmt]{@@new@@latex:}{@@old@@latex:}@@"))))
 
 (ert-deftest org-change-test-comment-then-spaced-change-both-captured ()
   "A comment followed by whitespace and another change stays a comment."
@@ -290,8 +290,8 @@ and rejecting one of them must still touch only that one."
     (insert "{!new!}{!old!}{!cmt!} {!new2!}{!old2!}")
     (org-change--before-processing 'latex)
     (should (equal (buffer-string)
-		   (concat "@@latex:\\replaced[comment=cmt]{new}{old}@@"
-			   " @@latex:\\replaced{new2}{old2}@@")))))
+		   (concat "@@latex:\\replaced[comment=cmt]{@@new@@latex:}{@@old@@latex:}@@"
+			   " @@latex:\\replaced{@@new2@@latex:}{@@old2@@latex:}@@")))))
 
 ;;; Escaping delimiters in change content
 
@@ -357,7 +357,8 @@ rejecting restores the text exactly."
   (with-temp-buffer
     (insert "{!a!\\}b!}{!old!}")	; new text is the escaped "a!}b"
     (org-change--before-processing 'latex)
-    (should (equal (buffer-string) "@@latex:\\replaced{a!}b}{old}@@"))))
+    (should (equal (buffer-string)
+		   "@@latex:\\replaced{@@a!}b@@latex:}{@@old@@latex:}@@"))))
 
 (ert-deftest org-change-test-escaped-delimiter-does-not-merge-adjacent ()
   "An escaped !} in one change's content must not swallow the next change."
@@ -365,8 +366,8 @@ rejecting restores the text exactly."
     (insert "{!!}{!x!\\}y!}{!A!}{!B!}")	; deletion of "x!}y", then a replacement
     (org-change--before-processing 'latex)
     (should (equal (buffer-string)
-		   (concat "@@latex:\\deleted{x!}y}@@"
-			   "@@latex:\\replaced{A}{B}@@")))))
+		   (concat "@@latex:\\deleted{@@x!}y@@latex:}@@"
+			   "@@latex:\\replaced{@@A@@latex:}{@@B@@latex:}@@")))))
 
 (ert-deftest org-change-test-latex-backslashes-survive-a-change ()
   "Marking LaTeX as a deletion and rejecting restores it verbatim."
@@ -927,16 +928,17 @@ strip the change's overlays: the closing markup stays hidden."
 (ert-deftest org-change-test-latex-export-with-author ()
   "LaTeX export maps the author to the changes package id."
   (should (equal (org-change--export-latex "old" "new" "@SG")
-		 "@@latex:\\replaced[id=SG]{new}{old}@@"))
+		 "@@latex:\\replaced[id=SG]{@@new@@latex:}{@@old@@latex:}@@"))
   (should (equal (org-change--export-latex "" "new" "@SG")
-		 "@@latex:\\added[id=SG]{new}@@"))
+		 "@@latex:\\added[id=SG]{@@new@@latex:}@@"))
   (should (equal (org-change--export-latex "old" "new" "@SG my note")
-		 "@@latex:\\replaced[id=SG, comment=my note]{new}{old}@@")))
+		 (concat "@@latex:\\replaced[id=SG, comment=my note]"
+			 "{@@new@@latex:}{@@old@@latex:}@@"))))
 
 (ert-deftest org-change-test-latex-export-comment-only-unchanged ()
   "A plain comment still exports as before, with no id."
   (should (equal (org-change--export-latex "old" "new" "cmt")
-		 "@@latex:\\replaced[comment=cmt]{new}{old}@@")))
+		 "@@latex:\\replaced[comment=cmt]{@@new@@latex:}{@@old@@latex:}@@")))
 
 (ert-deftest org-change-test-latex-author-definitions ()
   "Registered authors become changes package definitions."
@@ -954,15 +956,52 @@ data `replace-match' needs."
     (insert "x {!new!}{!old!}{!@SG!} y")
     (org-change--before-processing 'latex)
     (should (equal (buffer-string)
-		   "x @@latex:\\replaced[id=SG]{new}{old}@@ y"))))
+		   "x @@latex:\\replaced[id=SG]{@@new@@latex:}{@@old@@latex:}@@ y"))))
 
 (ert-deftest org-change-test-html-export-with-author ()
   "HTML export tags the spans with the author class."
   (should (equal (org-change--export-html "old" "new" "@SG")
 		 (concat "@@html:"
-			 "<span class=\"org-change-added org-change-author-SG\">new</span>"
-			 "<span class=\"org-change-deleted org-change-author-SG\">old</span>"
-			 "@@"))))
+			 "<span class=\"org-change-added org-change-author-SG\">@@"
+			 "new"
+			 "@@html:</span><span class=\"org-change-deleted org-change-author-SG\">@@"
+			 "old"
+			 "@@html:</span>@@"))))
+
+;;; Org markup inside a change is exported, not passed through raw
+
+(ert-deftest org-change-test-latex-processes-org-markup-in-a-change ()
+  "Org emphasis and special characters in a change are exported to LaTeX."
+  (require 'ox-latex)
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "A {!a *bold* and 95%!}{!!} word.\n")
+    (let ((out (org-export-as 'latex nil nil t)))
+      (should (string-match-p
+	       (regexp-quote "\\added{a \\textbf{bold} and 95\\%}") out)))))
+
+(ert-deftest org-change-test-latex-processes-a-link-at-a-change-edge ()
+  "A link flush against the change boundary is still exported."
+  (require 'ox-latex)
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "A {![[https://x.org][L]]!}{!!} word.\n")
+    (let ((out (org-export-as 'latex nil nil t)))
+      (should (string-match-p
+	       (regexp-quote "\\added{\\href{https://x.org}{L}}") out)))))
+
+(ert-deftest org-change-test-html-processes-org-markup-in-a-change ()
+  "Org emphasis in a change is exported to HTML, inside the span."
+  (require 'ox-html)
+  (with-temp-buffer
+    (org-mode)
+    (org-change-mode 1)
+    (insert "A {!a *bold* b!}{!!} word.\n")
+    (let ((out (org-export-as 'html nil nil t)))
+      (should (string-match-p
+	       "<span class=\"org-change-added\">a <b>bold</b> b</span>" out)))))
 
 ;;; Help
 
@@ -1743,37 +1782,37 @@ There is nothing to type there, so the prefix is not needed."
 (ert-deftest org-change-test-ascii-exports-an-addition ()
   "An addition becomes CriticMarkup's insertion."
   (should (equal (org-change-tests--ascii "a {!new!}{!!} b")
-		 "a @@ascii:{++new++}@@ b")))
+		 "a @@ascii:{++@@new@@ascii:++}@@ b")))
 
 (ert-deftest org-change-test-ascii-exports-a-deletion ()
   "A deletion becomes CriticMarkup's deletion."
   (should (equal (org-change-tests--ascii "a {!!}{!gone!} b")
-		 "a @@ascii:{--gone--}@@ b")))
+		 "a @@ascii:{--@@gone@@ascii:--}@@ b")))
 
 (ert-deftest org-change-test-ascii-exports-a-replacement ()
   "A replacement becomes CriticMarkup's substitution, old text first."
   (should (equal (org-change-tests--ascii "a {!new!}{!old!} b")
-		 "a @@ascii:{~~old~>new~~}@@ b")))
+		 "a @@ascii:{~~@@old@@ascii:~>@@new@@ascii:~~}@@ b")))
 
 (ert-deftest org-change-test-ascii-exports-a-comment ()
   "A comment follows the change as CriticMarkup's comment."
   (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!a note!} b")
-		 "a @@ascii:{~~old~>new~~}{>>a note<<}@@ b")))
+		 "a @@ascii:{~~@@old@@ascii:~>@@new@@ascii:~~}{>>a note<<}@@ b")))
 
 (ert-deftest org-change-test-ascii-exports-the-author-of-a-comment ()
   "An @ID prefix names the author, as it does on screen."
   (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!@SG a note!} b")
-		 "a @@ascii:{~~old~>new~~}{>>SG: a note<<}@@ b")))
+		 "a @@ascii:{~~@@old@@ascii:~>@@new@@ascii:~~}{>>SG: a note<<}@@ b")))
 
 (ert-deftest org-change-test-ascii-exports-an-author-without-a-comment ()
   "An author alone still shows, with nothing after the colon to say."
   (should (equal (org-change-tests--ascii "a {!new!}{!old!}{!@SG!} b")
-		 "a @@ascii:{~~old~>new~~}@@ b")))
+		 "a @@ascii:{~~@@old@@ascii:~>@@new@@ascii:~~}@@ b")))
 
 (ert-deftest org-change-test-ascii-decodes-escaped-delimiters ()
   "The escaping of the org-change delimiters is undone on export."
   (should (equal (org-change-tests--ascii "{!!}{!a!\\}b!}")
-		 "@@ascii:{--a!}b--}@@")))
+		 "@@ascii:{--@@a!}b@@ascii:--}@@")))
 
 (ert-deftest org-change-test-ascii-export-runs-end-to-end ()
   "A document exports to plain text with its changes marked up."
@@ -2157,20 +2196,21 @@ Return the resulting buffer text."
 (ert-deftest org-change-test-latex-exports-an-annotation ()
   "An annotation becomes the changes package highlight."
   (should (equal (org-change--export-latex "kept" "kept" "@SG note")
-		 "@@latex:\\highlight[id=SG, comment=note]{kept}@@")))
+		 "@@latex:\\highlight[id=SG, comment=note]{@@kept@@latex:}@@")))
 
 (ert-deftest org-change-test-html-exports-an-annotation ()
   "An annotation becomes a highlight span, its comment inside."
   (should (equal (org-change--export-html "kept" "kept" "@SG note")
 		 (concat "@@html:"
-			 "<span class=\"org-change-highlight org-change-author-SG\">"
-			 "kept<span class=\"org-change-comment\">note</span></span>"
+			 "<span class=\"org-change-highlight org-change-author-SG\">@@"
+			 "kept"
+			 "@@html:<span class=\"org-change-comment\">note</span></span>"
 			 "@@"))))
 
 (ert-deftest org-change-test-ascii-exports-an-annotation ()
   "An annotation becomes CriticMarkup's highlight, with its comment."
   (should (equal (org-change-tests--ascii "a {!kept!}{!kept!}{!a note!} b")
-		 "a @@ascii:{==kept==}{>>a note<<}@@ b")))
+		 "a @@ascii:{==@@kept@@ascii:==}{>>a note<<}@@ b")))
 
 (ert-deftest org-change-test-overview-shows-an-annotation-once ()
   "The overview lists a highlight's text once, even with deleted text shown."

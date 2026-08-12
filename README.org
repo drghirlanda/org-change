@@ -220,7 +220,7 @@ Lastly, you can set options for the ~changes~ package by setting the variable ~o
 #+end_src
 Note that you need to include the brackets. The ~changes~ package also has configurations that are not set through package options, which you can set through ~#+latex_header:~ lines.
 
-Note that the content of change markup is exported as raw LaTeX. This means org-mode markup like ~*bold*~ inside changes will not be converted. Use LaTeX commands directly instead (e.g., ~\textbf{bold}~).
+The content of a change is exported through org, so org markup inside a change is converted: ~{!a *bold* word with [[https://example.com][a link]] and $E=mc^2$!}~ comes out as ~\added{a \textbf{bold} word with \href{...}{a link} and \(E=mc^2\)}~. Raw LaTeX you type by hand (for example ~\textbf{bold}~) still passes through untouched. The one caveat is that org emphasis flush against the very start or end of a change is not recognized (see [[Bugs and limitations]]); links, citations, math, and character escaping have no such restriction.
 
 ** HTML export
 
@@ -285,9 +285,7 @@ where ~backend~ is a backend known to org-mode and ~backend-function~ is a funct
 
 Please submit bugs and feature requests as [[https://github.com/drghirlanda/org-change/issues][issues on Github]].
 
-- The content of change markup is exported as raw LaTeX (or raw HTML), bypassing org-mode's markup processing. Use the target format's commands directly inside changes.
-
-- LaTeX export is not fully compatible with HTML export if you use the extended comment syntax. That is, HTML export does not handle extra arguments like "author=SG," which are a feature of the ~changes~ package for LaTeX.
+- Org markup inside a change is exported, but org emphasis (~*bold*~, ~/italic/~, ~_underline_~) is only recognized when it is not flush against the very start or end of the change: it needs a bounding character there. So ~{!a *bold* b!}~ exports the bold, while ~{!*bold*!}~ does not. Links, citations, math, and character escaping have no such restriction. A change that spans a blank line or other block content still cannot be wrapped in the backend's inline command, and a literal ~}~ in LaTeX content can break brace matching; keep changes inline and use ~@@latex:...@@~ for anything that would.
 
 - The delimiter escaping described under [[Escaping the delimiters]] applies to text taken from a region, not to text typed by hand into a change. A hand-typed ~{!~ or ~!}~ is left verbatim and can confuse the parser. Escaping also assumes your content does not already contain the exact escaped forms ~{\!~ or ~!\}~; on the rare occasion it does, they will be turned back into ~{!~ and ~!}~ when the change is materialized.
 
