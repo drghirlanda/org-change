@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2026 Stefano Ghirlanda
 
-;; Version: 0.18.0
+;; Version: 0.19.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/drghirlanda/org-change
 ;; Keywords: wp, convenience
@@ -193,9 +193,11 @@ export."
   :type 'key-sequence
   :group 'org-change)
 
-(defface org-change-link-face
-  '((t (:background "lavender blush" :underline nil)))
-  "Face for Org Change links."
+(defface org-change-added-face
+  '((t (:background "#bfe6b0" :foreground "#173d12" :underline nil)))
+  "Face for added or changed text.
+A soft green highlight, like a marker over changed text.
+Renamed from `org-change-link-face' in version 0.19."
   :group 'org-change)
 
 (defface org-change-deleted-face
@@ -203,14 +205,17 @@ export."
   "Face for Org Change deleted/replaced text."
   :group 'org-change)
 
-(defface org-change-comment-face
-  '((t (:slant italic)))
-  "Face for the comment shown after a change."
+(defface org-change-annotation-face
+  '((t (:background "#ffe98a" :foreground "#4a3a00")))
+  "Face for notes: text highlighted by `org-change-annotate'.
+A soft yellow highlight, like a marker over an annotated span."
   :group 'org-change)
 
-(defface org-change-annotation-face
-  '((t (:background "light goldenrod yellow")))
-  "Face for text highlighted by `org-change-annotate'."
+(defface org-change-comment-face
+  '((t (:inherit org-change-annotation-face :slant italic)))
+  "Face for the comment shown after a change or annotation.
+Inherits `org-change-annotation-face', so a note reads the same
+yellow whether it stands on its own or trails a change."
   :group 'org-change)
 
 (defcustom org-change-overview-width 40
@@ -223,8 +228,8 @@ export."
   :type '(choice (const left) (const right) (const top) (const bottom))
   :group 'org-change)
 
-(defcustom org-change-face 'org-change-link-face
-  "Face for Org Change links."
+(defcustom org-change-face 'org-change-added-face
+  "Face for changed (added or replacement) text."
   :type 'face
   :group 'org-change)
 
@@ -459,7 +464,7 @@ echo area is needed for other things."
 	   ((and (equal new-text "") (equal old-text ""))
 	    (org-change--make-overlay full-beg full-end
 				      'display " "
-				      'face 'org-change-link-face))
+				      'face 'org-change-added-face))
 	   ;; Deletion: new text is empty
 	   ((equal new-text "")
 	    ;; Hide everything, show deleted marker

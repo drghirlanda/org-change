@@ -271,6 +271,10 @@ The key sequences, the deleted/replaced text marker, and the faces used to displ
   M-x customize-group RET org-change
 #+end_src
 
+The faces are: ~org-change-added-face~ (added or changed text, a soft green highlight), ~org-change-deleted-face~ (deleted or replaced text), ~org-change-annotation-face~ (annotated spans and notes, a soft yellow highlight), and ~org-change-comment-face~ (the comment shown after a change, which inherits ~org-change-annotation-face~ so a note reads the same yellow whether it stands on its own or trails a change). The face for changes is chosen by the ~org-change-face~ variable, which defaults to ~org-change-added-face~.
+
+Starting with version 0.19, ~org-change-added-face~ is the new name of the face previously called ~org-change-link-face~ (a leftover from the pre-0.5 link syntax); if you had customized ~org-change-link-face~, move your setting to the new name.
+
 * Adding exporters
 
 To add an export format, add something like this to your org file:
